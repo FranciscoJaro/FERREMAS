@@ -178,7 +178,6 @@ CREATE TABLE USUARIO (
   contrasena       VARCHAR2(100) NOT NULL,
   tipo_usuario     VARCHAR2(50)  NOT NULL,
   rut              VARCHAR2(20)  NOT NULL UNIQUE,
-  direccion        VARCHAR2(200) NOT NULL,
   primer_nombre    VARCHAR2(50)  NOT NULL,
   segundo_nombre   VARCHAR2(50),
   apellido_paterno VARCHAR2(50)  NOT NULL,
@@ -362,38 +361,38 @@ INSERT INTO MODELO (id_modelo, nombre, id_marca) VALUES (2, 'Sierra Circular', 2
 -- 5) Usuarios
 INSERT INTO USUARIO (
   id_usuario, correo, contrasena, tipo_usuario,
-  rut, direccion, primer_nombre, segundo_nombre, apellido_paterno, apellido_materno
+  rut, primer_nombre, segundo_nombre, apellido_paterno, apellido_materno
 ) VALUES (
   1, 'admin@ferremas.cl', 'admin123', 'administrador',
-  '12345678-9','callenose123', 'Admin', 'Root', 'Sistema', 'Ferremas'
+  '12345678-9', 'Admin', 'Root', 'Sistema', 'Ferremas'
 );
 INSERT INTO USUARIO (
   id_usuario, correo, contrasena, tipo_usuario,
-  rut, direccion, primer_nombre, segundo_nombre, apellido_paterno, apellido_materno
+  rut,  primer_nombre, segundo_nombre, apellido_paterno, apellido_materno
 ) VALUES (
   2, 'cliente@ferremas.cl', 'cliente123', 'cliente',
-  '98765432-1','callenose1233','Cliente', 'Demo', 'Prueba', 'Usuario'
+  '98765432-1','Cliente', 'Demo', 'Prueba', 'Usuario'
 );
 INSERT INTO USUARIO (
   id_usuario, correo, contrasena, tipo_usuario,
-  rut,direccion, primer_nombre, segundo_nombre, apellido_paterno, apellido_materno
+  rut, primer_nombre, segundo_nombre, apellido_paterno, apellido_materno
 ) VALUES (
   3, 'conta@ferremas.cl', 'conta123', 'contador',
-  '11222333-4','callenose12334', 'Contador', 'Uno', 'Finanzas', 'UC'
+  '11222333-4','Contador', 'Uno', 'Finanzas', 'UC'
 );
 INSERT INTO USUARIO (
   id_usuario, correo, contrasena, tipo_usuario,
-  rut, direccion,primer_nombre, segundo_nombre, apellido_paterno, apellido_materno
+  rut, primer_nombre, segundo_nombre, apellido_paterno, apellido_materno
 ) VALUES (
   4, 'bodega@ferremas.cl', 'bodega123', 'bodeguero',
-  '22333444-5','callenose123434', 'Bodeguero', 'Alfa', 'Inventario', 'Store'
+  '22333444-5', 'Bodeguero', 'Alfa', 'Inventario', 'Store'
 );
 INSERT INTO USUARIO (
   id_usuario, correo, contrasena, tipo_usuario,
-  rut,direccion, primer_nombre, segundo_nombre, apellido_paterno, apellido_materno
+  rut, primer_nombre, segundo_nombre, apellido_paterno, apellido_materno
 ) VALUES (
   5, 'vende@ferremas.cl', 'vende123', 'vendedor',
-  '33444555-6','callenose123434', 'Vendedor', 'Beta', 'Ventas', 'Shop'
+  '33444555-6','Vendedor', 'Beta', 'Ventas', 'Shop'
 );
 
 -- 6) Roles internos
@@ -466,8 +465,16 @@ COMMIT;
 
 
 
+ALTER TABLE PRODUCTO ADD (imagen VARCHAR2(400));
+SET DEFINE OFF;
 
 
+UPDATE PRODUCTO SET imagen = 'https://images.unsplash.com/photo-1519125323398-675f0ddb6308?auto=format&fit=crop&w=400&q=80' WHERE id_producto = 1;
+UPDATE PRODUCTO SET imagen = 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=400&q=80' WHERE id_producto = 2;
+
+SET DEFINE ON;
+
+COMMIT;
 
 
 

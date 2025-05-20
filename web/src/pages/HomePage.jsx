@@ -7,7 +7,7 @@ export default function HomePage() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    fetch('http://localhost:8000/productos/')
+    fetch('http://localhost:4000/productos')
       .then(res => {
         if (!res.ok) throw new Error('Error al cargar productos');
         return res.json();
@@ -60,7 +60,7 @@ export default function HomePage() {
               <Card className="shadow-sm border-0 h-100" style={{ transition: "transform 0.18s", cursor: "pointer" }}>
                 <Card.Img
                   variant="top"
-                  src="https://via.placeholder.com/400x220?text=Producto" // Puedes cambiar si tienes url real
+                  src={producto.imagen || "https://via.placeholder.com/400x220?text=Producto"}
                   style={{ objectFit: "cover", height: "220px", borderTopLeftRadius: "1rem", borderTopRightRadius: "1rem" }}
                   alt={producto.nombre}
                 />

@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import usuarios , productos
+from app.routers import usuarios,clientes
 
 app = FastAPI(
     title="API de gestión de usuarios",
@@ -10,7 +10,7 @@ app = FastAPI(
 
 # Traer routers
 app.include_router(usuarios.router)
-app.include_router(productos.router)
+app.include_router(clientes.router)
 
 # Agregar CORS DESPUÉS de crear la app
 app.add_middleware(

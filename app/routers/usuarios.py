@@ -215,7 +215,7 @@ class UsuarioRegistro(BaseModel):
     segundo_nombre: Optional[str] = None
     apellido_paterno: str
     apellido_materno: str
-    direccion: str
+   
 
 @router.post("/login")
 def login(data: LoginData):
@@ -257,28 +257,28 @@ def agregar_usuario(usuario: UsuarioRegistro):
         conn = get_conexion()
         cursor = conn.cursor()
 
-        # OBTENER EL SIGUIENTE ID LIBRE
+        # OBTENER EL SIGUIENTE ID
         cursor.execute("SELECT NVL(MAX(ID_USUARIO), 0) + 1 FROM usuario")
         next_id = cursor.fetchone()[0]
 
+        # Insertar usuario
         cursor.execute("""
             INSERT INTO usuario (
                 id_usuario, correo, contrasena, tipo_usuario,
-                rut, direccion ,primer_nombre, segundo_nombre,
-                apellido_paterno, apellido_materno
+                rut, primer_nombre, segundo_nombre, apellido_paterno, apellido_materno
             ) VALUES (
                 :id_usuario, :correo, :contrasena, :tipo_usuario,
-                :rut, :direccion, :primer_nombre, :segundo_nombre,
-                :apellido_paterno, :apellido_materno
+                :rut, :primer_nombre, :segundo_nombre, :apellido_paterno, :apellido_materno
             )
         """, {
             "id_usuario": next_id,
             **usuario.dict(),
-            "tipo_usuario": "cliente"  # <-- Fijo para todos
+            "tipo_usuario": "cliente"
         })
         conn.commit()
         cursor.close()
         conn.close()
-        return {"mensaje": "Usuario agregado con éxito"}
+        # Devuelve el id_usuario para usarlo en la tabla cliente
+        return {"mensaje": "Usuario agregado con éxito", "id_usuario": next_id}
     except Exception as ex:
         raise HTTPException(status_code=500, detail=str(ex))
