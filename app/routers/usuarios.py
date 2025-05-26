@@ -1,208 +1,14 @@
 from fastapi import APIRouter, HTTPException
 from app.database import get_conexion
 from typing import Optional
+from pydantic import BaseModel
 
 router = APIRouter(
     prefix="/usuarios",
     tags=["Usuarios"]
 )
 
-@router.get("/")
-def obtener_usuarios():
-    try:
-        conn = get_conexion()
-        cursor = conn.cursor()
-        cursor.execute("""
-            SELECT rut,
-                   correo,
-                   contrasena,
-                   primer_nombre,
-                   segundo_nombre,
-                   apellido_paterno,
-                   apellido_materno,
-                   tipo_usuario
-              FROM usuario
-        """)
-        usuarios = []
-        for rut, correo, contrasena, pn, sn, ap, am, tu in cursor:
-            usuarios.append({
-                "rut": rut,
-                "correo": correo,
-                "contrasena": contrasena,
-                "primer_nombre": pn,
-                "segundo_nombre": sn,
-                "apellido_paterno": ap,
-                "apellido_materno": am,
-                "tipo_usuario": tu
-            })
-        cursor.close()
-        conn.close()
-        return usuarios
-    except Exception as ex:
-        raise HTTPException(status_code=500, detail=str(ex))
-
-
-@router.get("/{rut_buscar}")
-def obtener_usuario(rut_buscar: str):
-    try:
-        conn = get_conexion()
-        cursor = conn.cursor()
-        cursor.execute("""
-            SELECT rut,
-                   correo,
-                   contrasena,
-                   primer_nombre,
-                   segundo_nombre,
-                   apellido_paterno,
-                   apellido_materno,
-                   tipo_usuario
-              FROM usuario
-             WHERE rut = :rut
-        """, {"rut": rut_buscar})
-        fila = cursor.fetchone()
-        cursor.close()
-        conn.close()
-        if not fila:
-            raise HTTPException(status_code=404, detail="Usuario no encontrado")
-        return {
-            "rut":             fila[0],
-            "correo":          fila[1],
-            "contrasena":      fila[2],
-            "primer_nombre":   fila[3],
-            "segundo_nombre":  fila[4],
-            "apellido_paterno":fila[5],
-            "apellido_materno":fila[6],
-            "tipo_usuario":    fila[7]
-        }
-    except Exception as ex:
-        raise HTTPException(status_code=500, detail=str(ex))
-
-
-
-
-
-@router.put("/{rut_actualizar}")
-def actualizar_usuario(
-    rut_actualizar: str,
-    correo: str,
-    contrasena: str,
-    primer_nombre: str,
-    segundo_nombre: Optional[str] = None,
-    apellido_paterno: str = "",
-    apellido_materno: str = "",
-    tipo_usuario: str = ""
-):
-    try:
-        conn = get_conexion()
-        cursor = conn.cursor()
-        cursor.execute("""
-            UPDATE usuario SET
-                correo           = :correo,
-                contrasena       = :contrasena,
-                primer_nombre    = :primer_nombre,
-                segundo_nombre   = :segundo_nombre,
-                apellido_paterno = :apellido_paterno,
-                apellido_materno = :apellido_materno,
-                tipo_usuario     = :tipo_usuario
-            WHERE rut = :rut
-        """, {
-            "rut": rut_actualizar,
-            "correo": correo,
-            "contrasena": contrasena,
-            "primer_nombre": primer_nombre,
-            "segundo_nombre": segundo_nombre,
-            "apellido_paterno": apellido_paterno,
-            "apellido_materno": apellido_materno,
-            "tipo_usuario": tipo_usuario
-        })
-        if cursor.rowcount == 0:
-            raise HTTPException(status_code=404, detail="Usuario no encontrado")
-        conn.commit()
-        cursor.close()
-        conn.close()
-        return {"mensaje": "Usuario actualizado con éxito"}
-    except Exception as ex:
-        raise HTTPException(status_code=500, detail=str(ex))
-
-
-@router.delete("/{rut_eliminar}")
-def eliminar_usuario(rut_eliminar: str):
-    try:
-        conn = get_conexion()
-        cursor = conn.cursor()
-        cursor.execute(
-            "DELETE FROM usuario WHERE rut = :rut",
-            {"rut": rut_eliminar}
-        )
-        if cursor.rowcount == 0:
-            raise HTTPException(status_code=404, detail="Usuario no encontrado")
-        conn.commit()
-        cursor.close()
-        conn.close()
-        return {"mensaje": "Usuario eliminado con éxito"}
-    except Exception as ex:
-        raise HTTPException(status_code=500, detail=str(ex))
-
-
-@router.patch("/{rut_actualizar}")
-def actualizar_parcial(
-    rut_actualizar: str,
-    correo: Optional[str] = None,
-    contrasena: Optional[str] = None,
-    primer_nombre: Optional[str] = None,
-    segundo_nombre: Optional[str] = None,
-    apellido_paterno: Optional[str] = None,
-    apellido_materno: Optional[str] = None,
-    tipo_usuario: Optional[str] = None
-):
-    try:
-        campos = []
-        valores = {"rut": rut_actualizar}
-
-        if correo is not None:
-            campos.append("correo = :correo")
-            valores["correo"] = correo
-        if contrasena is not None:
-            campos.append("contrasena = :contrasena")
-            valores["contrasena"] = contrasena
-        if primer_nombre is not None:
-            campos.append("primer_nombre = :primer_nombre")
-            valores["primer_nombre"] = primer_nombre
-        if segundo_nombre is not None:
-            campos.append("segundo_nombre = :segundo_nombre")
-            valores["segundo_nombre"] = segundo_nombre
-        if apellido_paterno is not None:
-            campos.append("apellido_paterno = :apellido_paterno")
-            valores["apellido_paterno"] = apellido_paterno
-        if apellido_materno is not None:
-            campos.append("apellido_materno = :apellido_materno")
-            valores["apellido_materno"] = apellido_materno
-        if tipo_usuario is not None:
-            campos.append("tipo_usuario = :tipo_usuario")
-            valores["tipo_usuario"] = tipo_usuario
-
-        if not campos:
-            raise HTTPException(status_code=400, detail="Debe enviar al menos un campo")
-
-        sql = f"UPDATE usuario SET {', '.join(campos)} WHERE rut = :rut"
-        conn = get_conexion()
-        cursor = conn.cursor()
-        cursor.execute(sql, valores)
-        if cursor.rowcount == 0:
-            raise HTTPException(status_code=404, detail="Usuario no encontrado")
-        conn.commit()
-        cursor.close()
-        conn.close()
-        return {"mensaje": "Usuario actualizado parcialmente"}
-    except Exception as ex:
-        raise HTTPException(status_code=500, detail=str(ex))
-
-
-####################################################################
-
-from pydantic import BaseModel
-
-
+# ---------- MODELOS ----------
 class LoginData(BaseModel):
     correo: str
     contrasena: str
@@ -215,10 +21,262 @@ class UsuarioRegistro(BaseModel):
     segundo_nombre: Optional[str] = None
     apellido_paterno: str
     apellido_materno: str
-   
+    tipo_usuario: str = "cliente"  # El admin puede elegirlo
+
+class UsuarioUpdate(BaseModel):
+    correo: Optional[str] = None
+    contrasena: Optional[str] = None
+    primer_nombre: Optional[str] = None
+    segundo_nombre: Optional[str] = None
+    apellido_paterno: Optional[str] = None
+    apellido_materno: Optional[str] = None
+    # tipo_usuario: Optional[str] = None # NO se debe editar el tipo
+
+# ---------- ENDPOINTS PRINCIPALES ----------
+
+@router.get("/")
+def obtener_usuarios():
+    """
+    Retorna todos los usuarios (sin mostrar contraseña por seguridad).
+    """
+    try:
+        conn = get_conexion()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT rut, correo, primer_nombre, segundo_nombre, apellido_paterno, apellido_materno, tipo_usuario
+            FROM usuario
+        """)
+        usuarios = []
+        for rut, correo, pn, sn, ap, am, tu in cursor:
+            usuarios.append({
+                "rut": rut,
+                "correo": correo,
+                "primer_nombre": pn,
+                "segundo_nombre": sn,
+                "apellido_paterno": ap,
+                "apellido_materno": am,
+                "tipo_usuario": tu
+            })
+        cursor.close()
+        conn.close()
+        return usuarios
+    except Exception as ex:
+        raise HTTPException(status_code=500, detail=str(ex))
+
+@router.get("/{rut_buscar}")
+def obtener_usuario(rut_buscar: str):
+    """
+    Retorna un usuario por su RUT.
+    """
+    try:
+        conn = get_conexion()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT rut, correo, primer_nombre, segundo_nombre, apellido_paterno, apellido_materno, tipo_usuario
+            FROM usuario
+            WHERE rut = :rut
+        """, {"rut": rut_buscar})
+        fila = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        if not fila:
+            raise HTTPException(status_code=404, detail="Usuario no encontrado")
+        return {
+            "rut": fila[0],
+            "correo": fila[1],
+            "primer_nombre": fila[2],
+            "segundo_nombre": fila[3],
+            "apellido_paterno": fila[4],
+            "apellido_materno": fila[5],
+            "tipo_usuario": fila[6]
+        }
+    except Exception as ex:
+        raise HTTPException(status_code=500, detail=str(ex))
+
+@router.post("/")
+def agregar_usuario(usuario: UsuarioRegistro):
+    """
+    Agrega un nuevo usuario del tipo seleccionado por el admin.
+    Inserta también en la subtabla correspondiente (valores por defecto).
+    """
+    try:
+        conn = get_conexion()
+        cursor = conn.cursor()
+        cursor.execute("SELECT NVL(MAX(ID_USUARIO), 0) + 1 FROM usuario")
+        next_id = cursor.fetchone()[0]
+
+        # Insertar usuario en la tabla principal
+        cursor.execute("""
+            INSERT INTO usuario (
+                id_usuario, correo, contrasena, tipo_usuario,
+                rut, primer_nombre, segundo_nombre, apellido_paterno, apellido_materno
+            ) VALUES (
+                :id_usuario, :correo, :contrasena, :tipo_usuario,
+                :rut, :primer_nombre, :segundo_nombre, :apellido_paterno, :apellido_materno
+            )
+        """, {
+            "id_usuario": next_id,
+            "correo": usuario.correo,
+            "contrasena": usuario.contrasena,
+            "tipo_usuario": usuario.tipo_usuario,
+            "rut": usuario.rut,
+            "primer_nombre": usuario.primer_nombre,
+            "segundo_nombre": usuario.segundo_nombre,
+            "apellido_paterno": usuario.apellido_paterno,
+            "apellido_materno": usuario.apellido_materno
+        })
+
+        # Insertar en la subtabla correspondiente (valores por defecto simples)
+        if usuario.tipo_usuario == "vendedor":
+            cursor.execute("INSERT INTO vendedor (id_usuario, id_sucursal) VALUES (:id, 1)", {"id": next_id})
+        elif usuario.tipo_usuario == "bodeguero":
+            cursor.execute("INSERT INTO bodeguero (id_usuario, id_sucursal) VALUES (:id, 1)", {"id": next_id})
+        elif usuario.tipo_usuario == "contador":
+            cursor.execute("INSERT INTO contador (id_usuario) VALUES (:id)", {"id": next_id})
+        elif usuario.tipo_usuario == "cliente":
+            cursor.execute("INSERT INTO cliente (id_usuario, nombre, direccion, telefono) VALUES (:id, 'Sin nombre', 'Sin dirección', '0')", {"id": next_id})
+        elif usuario.tipo_usuario == "administrador":
+            cursor.execute("INSERT INTO administrador (id_usuario) VALUES (:id)", {"id": next_id})
+
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return {"mensaje": "Usuario agregado con éxito", "id_usuario": next_id}
+    except Exception as ex:
+        raise HTTPException(status_code=500, detail=str(ex))
+
+@router.put("/{rut_actualizar}")
+def actualizar_usuario(rut_actualizar: str, usuario: UsuarioUpdate):
+    """
+    Actualiza los datos personales de un usuario (NO permite cambiar el tipo de usuario).
+    """
+    try:
+        campos = []
+        valores = {"rut": rut_actualizar}
+        for field, value in usuario.dict(exclude_unset=True).items():
+            if field == "tipo_usuario":  # Proteger integridad
+                continue
+            campos.append(f"{field} = :{field}")
+            valores[field] = value
+        if not campos:
+            raise HTTPException(status_code=400, detail="No hay datos para actualizar")
+        sql = f"UPDATE usuario SET {', '.join(campos)} WHERE rut = :rut"
+        conn = get_conexion()
+        cursor = conn.cursor()
+        cursor.execute(sql, valores)
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Usuario no encontrado")
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return {"mensaje": "Usuario actualizado con éxito"}
+    except Exception as ex:
+        raise HTTPException(status_code=500, detail=str(ex))
+
+@router.delete("/{rut_eliminar}")
+def eliminar_usuario(rut_eliminar: str):
+    """
+    Elimina un usuario y todas sus dependencias respetando las claves foráneas.
+    """
+    try:
+        conn = get_conexion()
+        cursor = conn.cursor()
+        cursor.execute("SELECT id_usuario, tipo_usuario FROM usuario WHERE rut = :rut", {"rut": rut_eliminar})
+        fila = cursor.fetchone()
+        if not fila:
+            raise HTTPException(status_code=404, detail="Usuario no encontrado")
+        id_usuario, tipo_usuario = fila
+
+        if tipo_usuario == "cliente":
+            cursor.execute("""
+                DELETE FROM detalle_pedido 
+                WHERE pedido_id_pedido IN (
+                    SELECT id_pedido FROM pedido WHERE cliente_id_usuario = :id
+                )""", {"id": id_usuario})
+            cursor.execute("""
+                DELETE FROM detalle_carrito 
+                WHERE carrito_id IN (
+                    SELECT id_carrito FROM carrito WHERE cliente_id_usuario = :id
+                )""", {"id": id_usuario})
+            cursor.execute("""
+                DELETE FROM pago
+                WHERE pedido_id_pedido IN (
+                    SELECT id_pedido FROM pedido WHERE cliente_id_usuario = :id
+                )""", {"id": id_usuario})
+            cursor.execute("DELETE FROM pago WHERE cliente_id_usuario = :id", {"id": id_usuario})
+            cursor.execute("DELETE FROM pedido WHERE cliente_id_usuario = :id", {"id": id_usuario})
+            cursor.execute("DELETE FROM carrito WHERE cliente_id_usuario = :id", {"id": id_usuario})
+            cursor.execute("DELETE FROM cliente WHERE id_usuario = :id", {"id": id_usuario})
+
+        elif tipo_usuario == "vendedor":
+            cursor.execute("""
+                DELETE FROM detalle_pedido 
+                WHERE pedido_id_pedido IN (
+                    SELECT id_pedido FROM pedido WHERE vendedor_id_usuario = :id
+                )""", {"id": id_usuario})
+            cursor.execute("""
+                DELETE FROM pago
+                WHERE pedido_id_pedido IN (
+                    SELECT id_pedido FROM pedido WHERE vendedor_id_usuario = :id
+                )""", {"id": id_usuario})
+            cursor.execute("DELETE FROM pedido WHERE vendedor_id_usuario = :id", {"id": id_usuario})
+            cursor.execute("DELETE FROM vendedor WHERE id_usuario = :id", {"id": id_usuario})
+
+        elif tipo_usuario == "bodeguero":
+            cursor.execute("""
+                DELETE FROM detalle_pedido 
+                WHERE pedido_id_pedido IN (
+                    SELECT id_pedido FROM pedido WHERE bodeguero_id_usuario = :id
+                )""", {"id": id_usuario})
+            cursor.execute("""
+                DELETE FROM pago
+                WHERE pedido_id_pedido IN (
+                    SELECT id_pedido FROM pedido WHERE bodeguero_id_usuario = :id
+                )""", {"id": id_usuario})
+            cursor.execute("DELETE FROM pedido WHERE bodeguero_id_usuario = :id", {"id": id_usuario})
+            cursor.execute("DELETE FROM bodeguero WHERE id_usuario = :id", {"id": id_usuario})
+
+        elif tipo_usuario == "contador":
+            cursor.execute("DELETE FROM pago WHERE confirmar_por = :id", {"id": id_usuario})
+            cursor.execute("""
+                DELETE FROM pago
+                WHERE pedido_id_pedido IN (
+                    SELECT id_pedido FROM pedido WHERE contador_id_usuario = :id
+                )""", {"id": id_usuario})
+            cursor.execute("""
+                DELETE FROM detalle_pedido 
+                WHERE pedido_id_pedido IN (
+                    SELECT id_pedido FROM pedido WHERE contador_id_usuario = :id
+                )""", {"id": id_usuario})
+            cursor.execute("DELETE FROM pedido WHERE contador_id_usuario = :id", {"id": id_usuario})
+            cursor.execute("DELETE FROM reporte_financiero WHERE contador_id_usuario = :id", {"id": id_usuario})
+            cursor.execute("DELETE FROM contador WHERE id_usuario = :id", {"id": id_usuario})
+
+        elif tipo_usuario == "administrador":
+            cursor.execute("DELETE FROM informe_venta WHERE administrador_id_usuario = :id", {"id": id_usuario})
+            cursor.execute("DELETE FROM administrador WHERE id_usuario = :id", {"id": id_usuario})
+
+        cursor.execute("DELETE FROM usuario WHERE id_usuario = :id", {"id": id_usuario})
+
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return {"mensaje": "Usuario eliminado correctamente"}
+    except Exception as ex:
+        raise HTTPException(status_code=500, detail=str(ex))
+
+@router.patch("/{rut_actualizar}")
+def actualizar_parcial(rut_actualizar: str, usuario: UsuarioUpdate):
+    """
+    Actualiza parcialmente los datos de un usuario (llama al mismo PUT).
+    """
+    return actualizar_usuario(rut_actualizar, usuario)
 
 @router.post("/login")
 def login(data: LoginData):
+    """
+    Login de usuario (devuelve rut, nombre y tipo si es válido).
+    """
     try:
         conn = get_conexion()
         cursor = conn.cursor()
@@ -246,39 +304,33 @@ def login(data: LoginData):
             raise HTTPException(status_code=401, detail="Credenciales incorrectas")
     except Exception as ex:
         raise HTTPException(status_code=500, detail=str(ex))
-    
-    
-    
-    ######################################################
-    
-@router.post("/")
-def agregar_usuario(usuario: UsuarioRegistro):
-    try:
-        conn = get_conexion()
-        cursor = conn.cursor()
 
-        # OBTENER EL SIGUIENTE ID
-        cursor.execute("SELECT NVL(MAX(ID_USUARIO), 0) + 1 FROM usuario")
-        next_id = cursor.fetchone()[0]
+# ---------------------------------------------------------------
+# ------------- FUNCIONES AVANZADAS NO USADAS -------------------
+# ---------------------------------------------------------------
+# class CambioTipoUsuario(BaseModel):
+#     nuevo_tipo: str
+#     datos_extra: dict = {}
 
-        # Insertar usuario
-        cursor.execute("""
-            INSERT INTO usuario (
-                id_usuario, correo, contrasena, tipo_usuario,
-                rut, primer_nombre, segundo_nombre, apellido_paterno, apellido_materno
-            ) VALUES (
-                :id_usuario, :correo, :contrasena, :tipo_usuario,
-                :rut, :primer_nombre, :segundo_nombre, :apellido_paterno, :apellido_materno
-            )
-        """, {
-            "id_usuario": next_id,
-            **usuario.dict(),
-            "tipo_usuario": "cliente"
-        })
-        conn.commit()
-        cursor.close()
-        conn.close()
-        # Devuelve el id_usuario para usarlo en la tabla cliente
-        return {"mensaje": "Usuario agregado con éxito", "id_usuario": next_id}
-    except Exception as ex:
-        raise HTTPException(status_code=500, detail=str(ex))
+# @router.post("/{rut}/cambiar_tipo")
+# def cambiar_tipo_usuario(rut: str, cambio: CambioTipoUsuario):
+#     """
+#     CAMBIO DE TIPO DE USUARIO: NO USADO POR RIESGO DE INTEGRIDAD REFERENCIAL.
+#     Se deja como referencia para desarrollos futuros (NO habilitado en frontend).
+#     """
+#     try:
+#         conn = get_conexion()
+#         cursor = conn.cursor()
+#         cursor.execute("SELECT id_usuario, tipo_usuario FROM usuario WHERE rut = :rut", {"rut": rut})
+#         fila = cursor.fetchone()
+#         if not fila:
+#             raise HTTPException(status_code=404, detail="Usuario no encontrado")
+#         id_usuario, tipo_actual = fila
+#         nuevo_tipo = cambio.nuevo_tipo
+#         # Aquí iría la lógica de eliminar/insertar en subtablas
+#         conn.commit()
+#         cursor.close()
+#         conn.close()
+#         return {"mensaje": f"Tipo de usuario cambiado correctamente a {nuevo_tipo}"}
+#     except Exception as ex:
+#         raise HTTPException(status_code=500, detail=str(ex))

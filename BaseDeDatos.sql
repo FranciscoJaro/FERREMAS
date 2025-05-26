@@ -460,6 +460,19 @@ INSERT INTO REPORTE_FINANCIERO (
   1, SYSDATE, 'Balance mensual', 3
 );
 
+
+
+
+INSERT INTO REPORTE_FINANCIERO 
+(ID_REPORTE, FECHA, DETALLE, CONTADOR_ID_USUARIO)
+VALUES (
+  SEQ_REPORTE_FINANCIERO.NEXTVAL,
+  SYSDATE,
+  'Reporte de ejemplo generado por el contador.',
+  3
+);
+
+
 COMMIT;
 
 
@@ -473,6 +486,7 @@ UPDATE PRODUCTO SET imagen = 'https://images.unsplash.com/photo-1519125323398-67
 UPDATE PRODUCTO SET imagen = 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=400&q=80' WHERE id_producto = 2;
 
 SET DEFINE ON;
+
 
 COMMIT;
 
