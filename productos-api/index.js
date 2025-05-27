@@ -11,8 +11,13 @@ const dbConfig = {
   password: 'ferremas123',
   connectString: 'localhost:1521/xe'
 };
+// Puerto
+const PORT = 4000;
+app.listen(PORT, () => {
+  console.log(`API de productos corriendo en http://localhost:${PORT}`);
+});
 
-// Listar sucursales (usando descripcion como "nombre")
+// Listar sucursales 
 app.get('/sucursales', async (req, res) => {
   let connection;
   try {
@@ -173,14 +178,7 @@ app.delete('/productos/:id_producto', async (req, res) => {
     if (connection) await connection.close();
   }
 });
-
-// Puerto
-const PORT = 4000;
-app.listen(PORT, () => {
-  console.log(`API de productos corriendo en http://localhost:${PORT}`);
-});
-
-
+/////////////////////////////////////////////////////////////
 
 // Obtener reportes financieros
 app.get('/reportes-financieros', async (req, res) => {
@@ -204,6 +202,85 @@ app.get('/reportes-financieros', async (req, res) => {
       nombre_contador: row[3]
     }));
     res.json(reportes);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  } finally {
+    if (connection) await connection.close();
+  }
+});
+//////////////////////////////////////////////////////////////
+
+// OBTENER PEDIDOS DE UN VENDEDOR (incluye detalle)
+app.get('/pedidos', async (req, res) => {
+  const vendedor_id = req.query.vendedor_id;
+  if (!vendedor_id) return res.status(400).json({ error: "Falta vendedor_id" });
+
+  let connection;
+  try {
+    connection = await oracledb.getConnection(dbConfig);
+
+    // Usa los nombres de columna REALES
+    const pedidosRes = await connection.execute(
+      `SELECT 
+         p.id_pedido, p.fecha, p.estado_entrega,
+         c.nombre AS cliente_nombre
+       FROM pedido p
+       JOIN cliente c ON p.cliente_id_usuario = c.id_usuario
+       WHERE p.vendedor_id_usuario = :vendedor_id
+       ORDER BY p.fecha DESC`,
+      { vendedor_id }
+    );
+
+    const pedidos = [];
+    for (const row of pedidosRes.rows) {
+      // Trae los productos del pedido
+      const productosRes = await connection.execute(
+        `SELECT pr.nombre, dp.cantidad 
+         FROM detalle_pedido dp
+         JOIN producto pr ON dp.producto_id_producto = pr.id_producto
+         WHERE dp.pedido_id_pedido = :id_pedido`,
+        { id_pedido: row[0] }
+      );
+      pedidos.push({
+        id_pedido: row[0],
+        fecha: row[1],
+        estado: row[2], // <--- OJO: Este campo viene de estado_entrega
+        cliente_nombre: row[3],
+        productos: productosRes.rows.map(rp => ({
+          nombre: rp[0],
+          cantidad: rp[1]
+        }))
+      });
+    }
+    res.json(pedidos);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  } finally {
+    if (connection) await connection.close();
+  }
+});
+
+
+
+// CAMBIAR ESTADO DEL PEDIDO
+app.put('/pedidos/:id_pedido/estado', async (req, res) => {
+  const { id_pedido } = req.params;
+  const { estado } = req.body;
+  if (!estado) return res.status(400).json({ error: "Falta estado" });
+
+  let connection;
+  try {
+    connection = await oracledb.getConnection(dbConfig);
+    const result = await connection.execute(
+      `UPDATE pedido SET estado_entrega=:estado WHERE id_pedido=:id_pedido`,
+      { estado, id_pedido },
+      { autoCommit: true }
+    );
+    if (result.rowsAffected === 0) {
+      res.status(404).json({ error: "Pedido no encontrado" });
+    } else {
+      res.json({ mensaje: "Estado actualizado" });
+    }
   } catch (err) {
     res.status(500).json({ error: err.message });
   } finally {

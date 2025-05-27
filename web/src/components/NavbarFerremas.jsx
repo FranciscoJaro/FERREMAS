@@ -1,4 +1,3 @@
-// src/components/NavbarFerremas.jsx
 import React from 'react';
 import { Navbar, Nav, Container } from 'react-bootstrap';
 import { FaShoppingCart } from "react-icons/fa";

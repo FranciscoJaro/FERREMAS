@@ -275,13 +275,13 @@ def actualizar_parcial(rut_actualizar: str, usuario: UsuarioUpdate):
 @router.post("/login")
 def login(data: LoginData):
     """
-    Login de usuario (devuelve rut, nombre y tipo si es válido).
+    Login de usuario (devuelve id_usuario, rut, nombre y tipo si es válido).
     """
     try:
         conn = get_conexion()
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT rut, primer_nombre, tipo_usuario
+            SELECT id_usuario, rut, primer_nombre, tipo_usuario
             FROM usuario
             WHERE correo = :correo AND contrasena = :contrasena
         """, {
@@ -295,9 +295,10 @@ def login(data: LoginData):
             return {
                 "mensaje": "Login exitoso",
                 "usuario": {
-                    "rut": usuario[0],
-                    "nombre": usuario[1],
-                    "tipo_usuario": usuario[2]
+                    "id_usuario": usuario[0],   # <- Esto faltaba!
+                    "rut": usuario[1],
+                    "nombre": usuario[2],
+                    "tipo_usuario": usuario[3]
                 }
             }
         else:

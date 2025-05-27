@@ -1,5 +1,3 @@
-
-
 -- DETALLE_PEDIDO
 BEGIN
   EXECUTE IMMEDIATE 'DROP TABLE DETALLE_PEDIDO CASCADE CONSTRAINTS';
@@ -331,14 +329,10 @@ CREATE TABLE REPORTE_FINANCIERO (
     REFERENCES CONTADOR(id_usuario)
 );
 
-
-
 -- =========================================
 -- 3) INSERT de datos de ejemplo
-
 -- =========================================
 
--- 3.1) USUARIOS y roles
 -- 1) Regiones
 INSERT INTO REGION (id_region, nombre) VALUES (1, 'Metropolitana');
 INSERT INTO REGION (id_region, nombre) VALUES (2, 'Valparaíso');
@@ -354,46 +348,20 @@ INSERT INTO SUCURSAL (id_sucursal, descripcion, id_comuna) VALUES (2, 'Costera',
 -- 4) Marcas y Modelos
 INSERT INTO MARCA (id_marca, nombre) VALUES (1, 'Bosch');
 INSERT INTO MARCA (id_marca, nombre) VALUES (2, 'Makita');
-
 INSERT INTO MODELO (id_modelo, nombre, id_marca) VALUES (1, 'Taladro Percutor', 1);
 INSERT INTO MODELO (id_modelo, nombre, id_marca) VALUES (2, 'Sierra Circular', 2);
 
--- 5) Usuarios
-INSERT INTO USUARIO (
-  id_usuario, correo, contrasena, tipo_usuario,
-  rut, primer_nombre, segundo_nombre, apellido_paterno, apellido_materno
-) VALUES (
-  1, 'admin@ferremas.cl', 'admin123', 'administrador',
-  '12345678-9', 'Admin', 'Root', 'Sistema', 'Ferremas'
-);
-INSERT INTO USUARIO (
-  id_usuario, correo, contrasena, tipo_usuario,
-  rut,  primer_nombre, segundo_nombre, apellido_paterno, apellido_materno
-) VALUES (
-  2, 'cliente@ferremas.cl', 'cliente123', 'cliente',
-  '98765432-1','Cliente', 'Demo', 'Prueba', 'Usuario'
-);
-INSERT INTO USUARIO (
-  id_usuario, correo, contrasena, tipo_usuario,
-  rut, primer_nombre, segundo_nombre, apellido_paterno, apellido_materno
-) VALUES (
-  3, 'conta@ferremas.cl', 'conta123', 'contador',
-  '11222333-4','Contador', 'Uno', 'Finanzas', 'UC'
-);
-INSERT INTO USUARIO (
-  id_usuario, correo, contrasena, tipo_usuario,
-  rut, primer_nombre, segundo_nombre, apellido_paterno, apellido_materno
-) VALUES (
-  4, 'bodega@ferremas.cl', 'bodega123', 'bodeguero',
-  '22333444-5', 'Bodeguero', 'Alfa', 'Inventario', 'Store'
-);
-INSERT INTO USUARIO (
-  id_usuario, correo, contrasena, tipo_usuario,
-  rut, primer_nombre, segundo_nombre, apellido_paterno, apellido_materno
-) VALUES (
-  5, 'vende@ferremas.cl', 'vende123', 'vendedor',
-  '33444555-6','Vendedor', 'Beta', 'Ventas', 'Shop'
-);
+-- 5) USUARIOS UNO POR UNO
+INSERT INTO USUARIO (id_usuario, correo, contrasena, tipo_usuario, rut, primer_nombre, segundo_nombre, apellido_paterno, apellido_materno)
+VALUES (1, 'admin@ferremas.cl', 'admin123', 'administrador', '12345678-9', 'Admin', 'Root', 'Sistema', 'Ferremas');
+INSERT INTO USUARIO (id_usuario, correo, contrasena, tipo_usuario, rut, primer_nombre, segundo_nombre, apellido_paterno, apellido_materno)
+VALUES (2, 'cliente@ferremas.cl', 'cliente123', 'cliente', '98765432-1','Cliente', 'Demo', 'Prueba', 'Usuario');
+INSERT INTO USUARIO (id_usuario, correo, contrasena, tipo_usuario, rut, primer_nombre, segundo_nombre, apellido_paterno, apellido_materno)
+VALUES (3, 'conta@ferremas.cl', 'conta123', 'contador', '11222333-4','Contador', 'Uno', 'Finanzas', 'UC');
+INSERT INTO USUARIO (id_usuario, correo, contrasena, tipo_usuario, rut, primer_nombre, segundo_nombre, apellido_paterno, apellido_materno)
+VALUES (4, 'bodega@ferremas.cl', 'bodega123', 'bodeguero', '22333444-5', 'Bodeguero', 'Alfa', 'Inventario', 'Store');
+INSERT INTO USUARIO (id_usuario, correo, contrasena, tipo_usuario, rut, primer_nombre, segundo_nombre, apellido_paterno, apellido_materno)
+VALUES (5, 'vende@ferremas.cl', 'vende123', 'vendedor', '33444555-6','Vendedor', 'Beta', 'Ventas', 'Shop');
 
 -- 6) Roles internos
 INSERT INTO ADMINISTRADOR (id_usuario) VALUES (1);
@@ -460,60 +428,13 @@ INSERT INTO REPORTE_FINANCIERO (
   1, SYSDATE, 'Balance mensual', 3
 );
 
-
-
-
-INSERT INTO REPORTE_FINANCIERO 
-(ID_REPORTE, FECHA, DETALLE, CONTADOR_ID_USUARIO)
-VALUES (
-  SEQ_REPORTE_FINANCIERO.NEXTVAL,
-  SYSDATE,
-  'Reporte de ejemplo generado por el contador.',
-  3
-);
-
-
 COMMIT;
 
-
-
-
+-- AGREGAR IMAGEN SI NO EXISTE
 ALTER TABLE PRODUCTO ADD (imagen VARCHAR2(400));
 SET DEFINE OFF;
-
-
 UPDATE PRODUCTO SET imagen = 'https://images.unsplash.com/photo-1519125323398-675f0ddb6308?auto=format&fit=crop&w=400&q=80' WHERE id_producto = 1;
 UPDATE PRODUCTO SET imagen = 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=400&q=80' WHERE id_producto = 2;
-
 SET DEFINE ON;
 
-
 COMMIT;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
