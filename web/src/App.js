@@ -19,7 +19,9 @@ import ReportesAdminPage from "./pages/Admin/ReportesAdminPage";
 import VendedorPage from './pages/Vendedor/VendedorPage';
 import BodegueroPage from './pages/Bodeguero/BodegueroPage';
 import PerfilPage from './pages/Cliente/PerfilPage';
-// Si tienes más roles/agrega aquí (ejemplo ContadorPage, etc.)
+
+// Nuevo: Página de carrito (cliente)
+import CarritoPage from './pages/Cliente/CarritoPage';
 
 import PrivateRoute from "./components/PrivateRoute";
 
@@ -91,6 +93,15 @@ function App() {
           element={
             <PrivateRoute rolesPermitidos={["cliente"]}>
               <PerfilPage />
+            </PrivateRoute>
+          }
+        />
+        {/* Nuevo: Carrito solo para cliente */}
+        <Route
+          path="/carrito"
+          element={
+            <PrivateRoute rolesPermitidos={["cliente"]}>
+              <CarritoPage />
             </PrivateRoute>
           }
         />

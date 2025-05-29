@@ -30,7 +30,7 @@ export default function LoginPage() {
           } else if (data.usuario.tipo_usuario === "bodeguero") {
             window.location.href = "/bodeguero";
           } else {
-            window.location.href = "/perfil";
+            window.location.href = "/";
           }
         }, 800);
       }

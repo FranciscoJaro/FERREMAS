@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Container, Button, Card, Row, Col, Spinner, Badge } from 'react-bootstrap';
+import { Container, Button, Card, Row, Col, Spinner, Badge, Alert } from 'react-bootstrap';
 import { FaTools } from "react-icons/fa";
+import { useNavigate } from "react-router-dom";
 
 function shortDesc(text, max = 48) {
   return text?.length > max ? text.slice(0, max - 3) + "..." : text;
@@ -10,6 +11,9 @@ export default function HomePage() {
   const [productos, setProductos] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
+  const [mensaje, setMensaje] = useState(null);
+  const [tipoMsg, setTipoMsg] = useState('success');
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetch('http://localhost:4000/productos')
@@ -28,6 +32,35 @@ export default function HomePage() {
         setCargando(false);
       });
   }, []);
+
+  // -------- AGREGAR AL CARRITO --------
+  const handleAgregarCarrito = async (producto) => {
+    const usuario = JSON.parse(localStorage.getItem("usuario"));
+    if (!usuario || usuario.tipo_usuario !== "cliente" || !usuario.id_usuario) {
+      setMensaje("Debes iniciar sesión como cliente para comprar.");
+      setTipoMsg("warning");
+      setTimeout(() => navigate("/login"), 1200);
+      return;
+    }
+    try {
+      const resp = await fetch("http://localhost:4000/carrito/agregar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id_usuario: usuario.id_usuario,
+          id_producto: producto.id_producto,
+          cantidad: 1
+        })
+      });
+      if (!resp.ok) throw new Error("No se pudo agregar al carrito");
+      setMensaje("Producto agregado al carrito.");
+      setTipoMsg("success");
+    } catch (e) {
+      setMensaje("Ocurrió un error al agregar al carrito.");
+      setTipoMsg("danger");
+    }
+    setTimeout(() => setMensaje(null), 1800);
+  };
 
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
@@ -49,6 +82,19 @@ export default function HomePage() {
           Compra fácil, rápido y seguro.<br />¡Todo lo que buscas para tus proyectos!
         </p>
       </div>
+
+      {/* MENSAJE de feedback */}
+      <Container fluid="md" style={{ maxWidth: 740 }}>
+        {mensaje && (
+          <Alert
+            variant={tipoMsg}
+            className="mt-4 text-center py-2"
+            style={{ fontSize: "1.06rem", letterSpacing: ".3px" }}
+          >
+            {mensaje}
+          </Alert>
+        )}
+      </Container>
 
       {/* PRODUCTOS */}
       <div style={{
@@ -144,6 +190,7 @@ export default function HomePage() {
                         transition: "box-shadow .18s, background .16s",
                         padding: "8px 0"
                       }}
+                      onClick={() => handleAgregarCarrito(producto)}
                     >
                       Agregar al carrito
                     </Button>

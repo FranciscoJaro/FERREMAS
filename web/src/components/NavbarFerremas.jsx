@@ -1,6 +1,6 @@
 import React from 'react';
 import { Navbar, Nav, Container } from 'react-bootstrap';
-import { FaShoppingCart } from "react-icons/fa";
+import { FaShoppingCart, FaUserCircle } from "react-icons/fa";
 import { Link, useNavigate } from 'react-router-dom';
 
 export default function NavbarFerremas() {
@@ -50,6 +50,13 @@ export default function NavbarFerremas() {
             {usuario ? (
               <>
                 <span className="text-light me-2">Hola, {usuario.nombre}</span>
+                {/* SOLO PARA CLIENTES */}
+                {usuario.tipo_usuario === "cliente" && (
+                  <Nav.Link as={Link} to="/perfil" className="ms-1 nav-link-custom">
+                    <FaUserCircle size={21} style={{ marginBottom: 2, marginRight: 4 }} />
+                    Mi Perfil
+                  </Nav.Link>
+                )}
                 <Nav.Link as={Link} to="/carrito" className="ms-3 nav-link-custom">
                   <FaShoppingCart size={22} title="Carrito" />
                 </Nav.Link>

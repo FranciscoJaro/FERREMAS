@@ -22,12 +22,11 @@ app.get('/sucursales', async (req, res) => {
   let connection;
   try {
     connection = await oracledb.getConnection(dbConfig);
-    // <-- OJO el cambio aquí -->
     const result = await connection.execute("SELECT id_sucursal, descripcion FROM sucursal");
     const sucursales = Array.isArray(result.rows)
       ? result.rows.map(row => ({
           id_sucursal: row[0],
-          nombre: row[1] // Se llama "nombre" en el frontend pero es "descripcion" en la tabla
+          nombre: row[1]
         }))
       : [];
     res.json(sucursales);
@@ -260,8 +259,6 @@ app.get('/pedidos', async (req, res) => {
   }
 });
 
-
-
 // CAMBIAR ESTADO DEL PEDIDO
 app.put('/pedidos/:id_pedido/estado', async (req, res) => {
   const { id_pedido } = req.params;
@@ -287,3 +284,211 @@ app.put('/pedidos/:id_pedido/estado', async (req, res) => {
     if (connection) await connection.close();
   }
 });
+/////////////////////////////////////////////////////////
+// ======================== CARRITO =======================
+
+// Obtener el carrito de un usuario (lista de productos en el carrito)
+app.get('/carrito/:id_usuario', async (req, res) => {
+  const { id_usuario } = req.params;
+  let connection;
+  try {
+    connection = await oracledb.getConnection(dbConfig);
+
+    // Trae el carrito actual (el más reciente en estado "CREADO")
+    const carritoRes = await connection.execute(
+      `SELECT id_carrito, fecha_creacion, estado FROM carrito 
+        WHERE cliente_id_usuario = :id_usuario AND estado = 'CREADO'
+        ORDER BY fecha_creacion DESC`,
+      { id_usuario }
+    );
+    if (carritoRes.rows.length === 0) {
+      return res.json({ carrito: null, productos: [] });
+    }
+    const carrito = {
+      id_carrito: carritoRes.rows[0][0],
+      fecha_creacion: carritoRes.rows[0][1],
+      estado: carritoRes.rows[0][2]
+    };
+
+    // Trae productos en el carrito
+    const productosRes = await connection.execute(
+      `SELECT dc.id_detalle_carrito, p.nombre, p.descripcion, dc.cantidad, dc.precio_unitario, p.imagen
+        FROM detalle_carrito dc
+        JOIN producto p ON dc.producto_id = p.id_producto
+        WHERE dc.carrito_id = :carrito_id`,
+      { carrito_id: carrito.id_carrito }
+    );
+    const productos = productosRes.rows.map(row => ({
+      id_detalle_carrito: row[0],
+      nombre: row[1],
+      descripcion: row[2],
+      cantidad: row[3],
+      precio_unitario: row[4],
+      imagen: row[5]
+    }));
+
+    res.json({ carrito, productos });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  } finally {
+    if (connection) await connection.close();
+  }
+});
+
+// Agregar producto al carrito (SOLO una vez, bien implementado)
+app.post('/carrito/agregar', async (req, res) => {
+  const { id_usuario, id_producto, cantidad } = req.body;
+  if (!id_usuario || !id_producto || !cantidad) {
+    return res.status(400).json({ error: "Faltan datos para agregar al carrito" });
+  }
+
+  let connection;
+  try {
+    connection = await oracledb.getConnection(dbConfig);
+
+    // Buscar el carrito "CREADO" del cliente, si no existe crear uno
+    let result = await connection.execute(
+      "SELECT id_carrito FROM carrito WHERE cliente_id_usuario=:id_usuario AND estado='CREADO'",
+      { id_usuario }
+    );
+    let id_carrito;
+    if (result.rows.length === 0) {
+      // Crear carrito nuevo
+      const resMax = await connection.execute("SELECT NVL(MAX(id_carrito),0)+1 FROM carrito");
+      id_carrito = resMax.rows[0][0];
+      await connection.execute(
+        "INSERT INTO carrito (id_carrito, fecha_creacion, estado, cliente_id_usuario) VALUES (:id_carrito, SYSDATE, 'CREADO', :id_usuario)",
+        { id_carrito, id_usuario },
+        { autoCommit: false }
+      );
+    } else {
+      id_carrito = result.rows[0][0];
+    }
+
+    // Verifica si el producto ya está en el carrito
+    result = await connection.execute(
+      "SELECT id_detalle_carrito, cantidad FROM detalle_carrito WHERE carrito_id=:id_carrito AND producto_id=:id_producto",
+      { id_carrito, id_producto }
+    );
+    if (result.rows.length === 0) {
+      // Insertar nuevo detalle
+      const resMaxDet = await connection.execute("SELECT NVL(MAX(id_detalle_carrito),0)+1 FROM detalle_carrito");
+      const id_detalle_carrito = resMaxDet.rows[0][0];
+
+      // Obtener precio actual
+      const precioRes = await connection.execute(
+        "SELECT precio FROM producto WHERE id_producto=:id_producto",
+        { id_producto }
+      );
+      const precio_unitario = precioRes.rows[0][0];
+
+      await connection.execute(
+        `INSERT INTO detalle_carrito (id_detalle_carrito, carrito_id, producto_id, cantidad, precio_unitario)
+         VALUES (:id_detalle_carrito, :id_carrito, :id_producto, :cantidad, :precio_unitario)`,
+        { id_detalle_carrito, id_carrito, id_producto, cantidad, precio_unitario },
+        { autoCommit: true }
+      );
+    } else {
+      // Ya existe, actualiza la cantidad
+      const nuevaCantidad = result.rows[0][1] + cantidad;
+      await connection.execute(
+        "UPDATE detalle_carrito SET cantidad=:nuevaCantidad WHERE id_detalle_carrito=:id_detalle_carrito",
+        { nuevaCantidad, id_detalle_carrito: result.rows[0][0] },
+        { autoCommit: true }
+      );
+    }
+
+    res.json({ mensaje: "Producto agregado al carrito", id_carrito });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  } finally {
+    if (connection) await connection.close();
+  }
+});
+
+// Eliminar producto del carrito
+app.delete('/carrito/eliminar/:id_detalle_carrito', async (req, res) => {
+  const { id_detalle_carrito } = req.params;
+  let connection;
+  try {
+    connection = await oracledb.getConnection(dbConfig);
+    const result = await connection.execute(
+      `DELETE FROM detalle_carrito WHERE id_detalle_carrito = :id_detalle_carrito`,
+      { id_detalle_carrito },
+      { autoCommit: true }
+    );
+    if (result.rowsAffected === 0) {
+      res.status(404).json({ error: "Producto no encontrado en el carrito" });
+    } else {
+      res.json({ mensaje: "Producto eliminado del carrito" });
+    }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  } finally {
+    if (connection) await connection.close();
+  }
+});
+
+// Vaciar carrito (opcional)
+app.delete('/carrito/vaciar/:id_usuario', async (req, res) => {
+  const { id_usuario } = req.params;
+  let connection;
+  try {
+    connection = await oracledb.getConnection(dbConfig);
+
+    // Encuentra el carrito "CREADO"
+    const carritoRes = await connection.execute(
+      `SELECT id_carrito FROM carrito WHERE cliente_id_usuario = :id_usuario AND estado = 'CREADO'`,
+      { id_usuario }
+    );
+    if (carritoRes.rows.length === 0) {
+      return res.status(404).json({ error: "No se encontró un carrito activo" });
+    }
+    const id_carrito = carritoRes.rows[0][0];
+
+    await connection.execute(
+      `DELETE FROM detalle_carrito WHERE carrito_id = :id_carrito`,
+      { id_carrito },
+      { autoCommit: true }
+    );
+    res.json({ mensaje: "Carrito vaciado" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  } finally {
+    if (connection) await connection.close();
+  }
+});
+
+
+//  Actualizar cantidad de un producto en el carrito --------
+app.put('/carrito/actualizar-cantidad/:id_detalle_carrito', async (req, res) => {
+  const { id_detalle_carrito } = req.params;
+  const { cantidad } = req.body;
+  if (!cantidad || cantidad < 1) {
+    return res.status(400).json({ error: "Cantidad inválida" });
+  }
+  let connection;
+  try {
+    connection = await oracledb.getConnection(dbConfig);
+    const result = await connection.execute(
+      `UPDATE detalle_carrito SET cantidad = :cantidad WHERE id_detalle_carrito = :id_detalle_carrito`,
+      { cantidad, id_detalle_carrito },
+      { autoCommit: true }
+    );
+    if (result.rowsAffected === 0) {
+      res.status(404).json({ error: "Detalle no encontrado" });
+    } else {
+      res.json({ mensaje: "Cantidad actualizada" });
+    }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  } finally {
+    if (connection) await connection.close();
+  }
+});
+
+
+
+
+
+// =================== FIN CARRITO ===================
