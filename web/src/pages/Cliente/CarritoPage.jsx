@@ -1,28 +1,33 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { Container, Table, Button, Spinner, Alert, Row, Col, Card, Form } from "react-bootstrap";
+
+// Client ID sandbox de PayPal
+const PAYPAL_CLIENT_ID = "AX8-uXey4JmOVfSsiVcjImUMIfiJ2hbUOENG-siWfG0n-hjcEWctEyQCAHZUk-Cj6R0bxd5pvVD4nqHQ";
 
 export default function CarritoPage() {
   const usuario = JSON.parse(localStorage.getItem("usuario"));
-  const [carrito, setCarrito] = useState(null);
   const [productos, setProductos] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
   const [msg, setMsg] = useState("");
-  const [editando, setEditando] = useState({}); // Para controlar edición de cantidad
+  const [dolar, setDolar] = useState(null);
+  const paypalRef = useRef();
 
-  // Carga el carrito del cliente al montar
+  // Carga el valor del dólar una sola vez
   useEffect(() => {
-    if (!usuario || !usuario.id_usuario) return;
-    cargarCarrito();
-    // eslint-disable-next-line
+    fetch("https://mindicador.cl/api/dolar")
+      .then(res => res.json())
+      .then(data => setDolar(data.serie[0].valor))
+      .catch(() => setDolar(950));
   }, []);
 
-  const cargarCarrito = () => {
+  // Cargar carrito al iniciar
+  useEffect(() => {
+    if (!usuario || !usuario.id_usuario) return;
     setCargando(true);
     fetch(`http://localhost:4000/carrito/${usuario.id_usuario}`)
       .then(res => res.json())
       .then(data => {
-        setCarrito(data.carrito);
         setProductos(data.productos || []);
         setCargando(false);
         setError("");
@@ -31,7 +36,8 @@ export default function CarritoPage() {
         setError("Error al cargar el carrito.");
         setCargando(false);
       });
-  };
+    // eslint-disable-next-line
+  }, [usuario?.id_usuario]);
 
   // Eliminar producto del carrito
   const handleEliminar = async (id_detalle) => {
@@ -49,40 +55,91 @@ export default function CarritoPage() {
     }
   };
 
-  // Cambiar cantidad (en tabla, en memoria)
-  const handleCantidadChange = (id_detalle, cantidad) => {
-    setProductos(productos.map(p =>
+  // Cambiar cantidad y guardar automáticamente
+  const handleCantidadChange = async (id_detalle, cantidad) => {
+    if (cantidad < 1) return;
+    const nuevaLista = productos.map(p =>
       p.id_detalle_carrito === id_detalle ? { ...p, cantidad: Number(cantidad) } : p
-    ));
-    setEditando({ ...editando, [id_detalle]: true }); // Habilitar botón guardar
-  };
-
-  // Guardar nueva cantidad en el backend
-  const handleGuardarCantidad = async (id_detalle, cantidad) => {
-    if (cantidad < 1) {
-      alert("Cantidad inválida");
-      return;
-    }
+    );
+    setProductos(nuevaLista);
     try {
-      const res = await fetch(`http://localhost:4000/carrito/actualizar-cantidad/${id_detalle}`, {
+      await fetch(`http://localhost:4000/carrito/actualizar-cantidad/${id_detalle}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ cantidad })
       });
-      if (res.ok) {
-        setMsg("Cantidad actualizada");
-        setEditando({ ...editando, [id_detalle]: false });
-        cargarCarrito(); // Refresca datos desde la API
-      } else {
-        alert("No se pudo actualizar la cantidad");
-      }
+      setMsg("Cantidad actualizada");
     } catch {
       alert("Error de conexión");
     }
   };
 
-  // Calcular total
-  const total = productos.reduce((sum, p) => sum + p.cantidad * p.precio_unitario, 0);
+  // Calcular totales
+  const totalCLP = productos.reduce((sum, p) => sum + p.cantidad * p.precio_unitario, 0);
+  const totalUSD = dolar ? Math.round((totalCLP / dolar) * 100) / 100 : 0;
+
+  // PayPal: solo una vez, y cambia el "key" del div para forzar rerender seguro
+  const [paypalLoaded, setPaypalLoaded] = useState(false);
+
+  useEffect(() => {
+    if (!paypalLoaded) {
+      const script = document.createElement("script");
+      script.src = `https://www.paypal.com/sdk/js?client-id=${PAYPAL_CLIENT_ID}&currency=USD`;
+      script.async = true;
+      script.onload = () => setPaypalLoaded(true);
+      document.body.appendChild(script);
+    }
+  }, [paypalLoaded]);
+
+  useEffect(() => {
+    if (!paypalLoaded || !paypalRef.current || !window.paypal) return;
+    window.paypal.Buttons({
+      style: {
+        layout: 'horizontal',
+        color: 'blue',
+        shape: 'rect',
+        label: 'pay'
+      },
+      createOrder: (data, actions) => {
+        return actions.order.create({
+          purchase_units: [{
+            amount: {
+              value: totalUSD.toString(),
+              currency_code: "USD"
+            },
+            description: "Pago Ferremas"
+          }]
+        });
+      },
+      onApprove: (data, actions) => {
+        return actions.order.capture().then(async function (details) {
+          setMsg("¡Pago realizado correctamente! Generando pedido...");
+
+          // Llama a tu API para crear el pedido real
+          try {
+            const resp = await fetch("http://localhost:4000/pedido/crear-desde-carrito", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ id_usuario: usuario.id_usuario })
+            });
+            const result = await resp.json();
+            if (resp.ok) {
+              setMsg("¡Pedido generado correctamente! ID: " + result.id_pedido);
+              setProductos([]); // Limpia el carrito visualmente
+            } else {
+              setMsg("Error al generar pedido: " + (result.error || "Error desconocido"));
+            }
+          } catch (err) {
+            setMsg("Error de conexión con el backend al crear pedido");
+          }
+        });
+      },
+      onError: (err) => {
+        setMsg("Ocurrió un error con PayPal.");
+      }
+    }).render(paypalRef.current);
+    // eslint-disable-next-line
+  }, [paypalLoaded, totalUSD]);
 
   return (
     <div style={{ background: "#f9fafb", minHeight: "87vh" }}>
@@ -123,22 +180,13 @@ export default function CarritoPage() {
                     </td>
                     <td className="text-center">${Number(prod.precio_unitario).toLocaleString("es-CL")}</td>
                     <td className="text-center">
-                      <Form className="d-flex justify-content-center align-items-center" style={{ gap: 6 }}
-                        onSubmit={e => { e.preventDefault(); handleGuardarCantidad(prod.id_detalle_carrito, prod.cantidad); }}>
-                        <Form.Control
-                          type="number"
-                          min={1}
-                          value={prod.cantidad}
-                          style={{ width: 60 }}
-                          onChange={e => handleCantidadChange(prod.id_detalle_carrito, e.target.value)}
-                        />
-                        <Button
-                          size="sm"
-                          variant="success"
-                          type="submit"
-                          disabled={!editando[prod.id_detalle_carrito]}
-                        >Guardar</Button>
-                      </Form>
+                      <Form.Control
+                        type="number"
+                        min={1}
+                        value={prod.cantidad}
+                        style={{ width: 60 }}
+                        onChange={e => handleCantidadChange(prod.id_detalle_carrito, e.target.value)}
+                      />
                     </td>
                     <td className="text-center fw-bold">
                       ${Number(prod.precio_unitario * prod.cantidad).toLocaleString("es-CL")}
@@ -164,21 +212,19 @@ export default function CarritoPage() {
                   <Card.Body>
                     <h5 className="mb-3">Resumen de compra</h5>
                     <div className="d-flex justify-content-between mb-2">
-                    <span>Total productos</span>
-                    <b>{productos.reduce((acum, p) => acum + p.cantidad, 0)}</b>
+                      <span>Total productos</span>
+                      <b>{productos.reduce((acum, p) => acum + p.cantidad, 0)}</b>
                     </div>
                     <div className="d-flex justify-content-between mb-2 fs-5">
-                      <span>Total a pagar:</span>
-                      <span className="fw-bold text-primary">${total.toLocaleString("es-CL")}</span>
+                      <span>Total a pagar (CLP):</span>
+                      <span className="fw-bold text-primary">${totalCLP.toLocaleString("es-CL")}</span>
                     </div>
-                    <Button
-                      variant="success"
-                      className="w-100 mt-2 fw-semibold"
-                      size="lg"
-                      disabled
-                    >
-                      Finalizar compra (pronto)
-                    </Button>
+                    <div className="d-flex justify-content-between mb-2 fs-5">
+                      <span>Total a pagar (USD):</span>
+                      <span className="fw-bold text-info">${totalUSD}</span>
+                    </div>
+                    {/* Botón PayPal */}
+                    <div ref={paypalRef} key={totalUSD} className="my-3" />
                   </Card.Body>
                 </Card>
               </Col>

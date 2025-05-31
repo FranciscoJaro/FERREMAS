@@ -489,6 +489,154 @@ app.put('/carrito/actualizar-cantidad/:id_detalle_carrito', async (req, res) => 
 
 
 
+////BODEGUERO
+// OBTENER PEDIDOS PARA BODEGUERO
+app.get('/pedidos-bodega', async (req, res) => {
+  const bodeguero_id = req.query.bodeguero_id;
+  if (!bodeguero_id) return res.status(400).json({ error: "Falta bodeguero_id" });
+
+  let connection;
+  try {
+    connection = await oracledb.getConnection(dbConfig);
+    // Solo los pedidos que necesita preparar el bodeguero
+    const pedidosRes = await connection.execute(
+      `SELECT 
+         p.id_pedido, p.fecha, p.estado_entrega, 
+         c.nombre AS cliente_nombre
+       FROM pedido p
+       JOIN cliente c ON p.cliente_id_usuario = c.id_usuario
+       WHERE (p.estado_entrega = 'APROBADO' OR p.estado_entrega = 'EN PREPARACIÓN')
+       ORDER BY p.fecha DESC`
+    );
+    const pedidos = [];
+    for (const row of pedidosRes.rows) {
+      // Trae los productos del pedido
+      const productosRes = await connection.execute(
+        `SELECT pr.nombre, dp.cantidad 
+         FROM detalle_pedido dp
+         JOIN producto pr ON dp.producto_id_producto = pr.id_producto
+         WHERE dp.pedido_id_pedido = :id_pedido`,
+        { id_pedido: row[0] }
+      );
+      pedidos.push({
+        id_pedido: row[0],
+        fecha: row[1] ? new Date(row[1]).toLocaleDateString() : "",
+        estado: row[2],
+        cliente_nombre: row[3],
+        productos: productosRes.rows.map(rp => ({
+          nombre: rp[0],
+          cantidad: rp[1]
+        }))
+      });
+    }
+    res.json(pedidos);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  } finally {
+    if (connection) await connection.close();
+  }
+});
+
+
+
+/////////////////////////////////////////////////
+// Crear pedido desde carrito (después de pagar)
+app.post('/pedido/crear-desde-carrito', async (req, res) => {
+  const { id_usuario } = req.body;
+  if (!id_usuario) return res.status(400).json({ error: "Falta id_usuario" });
+  let connection;
+  try {
+    connection = await oracledb.getConnection(dbConfig);
+
+    // 1. Buscar carrito ACTIVO
+    const carritoRes = await connection.execute(
+      "SELECT id_carrito FROM carrito WHERE cliente_id_usuario=:id_usuario AND estado='CREADO'",
+      { id_usuario }
+    );
+    if (carritoRes.rows.length === 0) {
+      return res.status(400).json({ error: "No hay carrito activo para este usuario" });
+    }
+    const id_carrito = carritoRes.rows[0][0];
+
+    // 2. Traer productos del carrito
+    const detallesRes = await connection.execute(
+      `SELECT producto_id, cantidad, precio_unitario FROM detalle_carrito WHERE carrito_id = :id_carrito`,
+      { id_carrito }
+    );
+    const productos = detallesRes.rows;
+
+    if (!productos.length) {
+      return res.status(400).json({ error: "El carrito está vacío" });
+    }
+
+    // 3. Generar ID de pedido
+    const pedidoRes = await connection.execute("SELECT NVL(MAX(id_pedido),0)+1 FROM pedido");
+    const id_pedido = pedidoRes.rows[0][0];
+
+    // 4. Traer datos de roles asignados automáticamente
+    // (Aquí deberías ajustar según tu lógica real)
+    const id_vendedor = 5;    // ejemplo
+    const id_bodeguero = 4;   // ejemplo
+    const id_contador = 3;    // ejemplo
+    const id_sucursal = 1;    // ejemplo
+
+    // 5. Crear el pedido
+    await connection.execute(
+      `INSERT INTO pedido (id_pedido, fecha, estado_entrega, tipo_entrega,
+        cliente_id_usuario, bodeguero_id_usuario, contador_id_usuario,
+        carrito_id_carrito, vendedor_id_usuario, sucursal_id_sucursal)
+      VALUES (:id_pedido, SYSDATE, 'PENDIENTE', 'DOMICILIO',
+        :cliente, :bodeguero, :contador, :carrito, :vendedor, :sucursal)`,
+      {
+        id_pedido,
+        cliente: id_usuario,
+        bodeguero: id_bodeguero,
+        contador: id_contador,
+        carrito: id_carrito,
+        vendedor: id_vendedor,
+        sucursal: id_sucursal,
+      }
+    );
+
+    // 6. Crear los detalles y restar stock
+    for (const [producto_id, cantidad, precio_unitario] of productos) {
+      const id_detalleRes = await connection.execute("SELECT NVL(MAX(id_detalle_pedido),0)+1 FROM detalle_pedido");
+      const id_detalle_pedido = id_detalleRes.rows[0][0];
+      await connection.execute(
+        `INSERT INTO detalle_pedido (id_detalle_pedido, pedido_id_pedido, producto_id_producto, cantidad, precio_unitario)
+         VALUES (:id_detalle_pedido, :id_pedido, :producto_id, :cantidad, :precio_unitario)`,
+        { id_detalle_pedido, id_pedido, producto_id, cantidad, precio_unitario }
+      );
+      await connection.execute(
+        `UPDATE producto SET stock = stock - :cantidad WHERE id_producto = :producto_id`,
+        { cantidad, producto_id }
+      );
+    }
+
+    // 7. Cambia estado del carrito a USADO
+    await connection.execute(
+      `UPDATE carrito SET estado='USADO' WHERE id_carrito=:id_carrito`,
+      { id_carrito }
+    );
+
+    // 8. Borra detalles del carrito para limpiar (opcional)
+    await connection.execute(
+      `DELETE FROM detalle_carrito WHERE carrito_id = :id_carrito`,
+      { id_carrito }
+    );
+
+    await connection.commit();
+    res.json({ mensaje: "Pedido creado correctamente", id_pedido });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  } finally {
+    if (connection) await connection.close();
+  }
+});
+
+
+
+
 
 
 // =================== FIN CARRITO ===================

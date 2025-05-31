@@ -22,6 +22,19 @@ export default function LoginPage() {
         setTipo("success");
         setMensaje("¡Bienvenido " + data.usuario.nombre + "!");
         localStorage.setItem("usuario", JSON.stringify(data.usuario));
+
+        // SOLO el admin y si debe cambiar contraseña: lo fuerza a la página de cambio
+        if (
+          data.usuario.tipo_usuario === "administrador" &&
+          data.usuario.cambiar_contrasena === 1
+        ) {
+          setTimeout(() => {
+            window.location.href = "/cambiar-contrasena";
+          }, 600);
+          return;
+        }
+
+        // Login normal por rol
         setTimeout(() => {
           if (data.usuario.tipo_usuario === "administrador") {
             window.location.href = "/admin";
@@ -33,8 +46,7 @@ export default function LoginPage() {
             window.location.href = "/";
           }
         }, 800);
-      }
-      else {
+      } else {
         setTipo("danger");
         setMensaje(data.detail || "Credenciales incorrectas");
       }
@@ -118,6 +130,15 @@ export default function LoginPage() {
                 Iniciar sesión
               </Button>
             </Form>
+            <div className="text-center mt-2">
+              <a href="/recuperar-contrasena" style={{
+                color: "#2563eb",
+                textDecoration: "underline",
+                fontSize: "0.99rem"
+              }}>
+                ¿Olvidaste tu contraseña?
+              </a>
+            </div>
           </Card.Body>
         </Card>
       </Container>

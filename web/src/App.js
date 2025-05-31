@@ -23,89 +23,107 @@ import PerfilPage from './pages/Cliente/PerfilPage';
 // Nuevo: Página de carrito (cliente)
 import CarritoPage from './pages/Cliente/CarritoPage';
 
+// **NUEVO: Página de cambio de contraseña**
+import CambiarContrasenaPage from './pages/CambiarContrasenaPage';
+import RecuperarContrasenaPage from './pages/RecuperarContrasenaPage';
+
 import PrivateRoute from "./components/PrivateRoute";
 
 function App() {
   return (
     <Router>
       <NavbarFerremas />
-      <Routes>
-        {/* Páginas generales */}
-        <Route path="/" element={<HomePage />} />
-        <Route path="/sobre-nosotros" element={<SobreNosotros />} />
-        <Route path="/contacto" element={<Contacto />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/registro" element={<Registro />} />
+      {/* ENVUELVE LAS RUTAS EN UN DIV MAIN-CONTENT */}
+      <div className="main-content">
+        <Routes>
+          {/* Páginas generales */}
+          <Route path="/" element={<HomePage />} />
+          <Route path="/sobre-nosotros" element={<SobreNosotros />} />
+          <Route path="/contacto" element={<Contacto />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/registro" element={<Registro />} />
 
-        {/* Panel ADMIN + rutas internas protegidas */}
-        <Route
-          path="/admin"
-          element={
-            <PrivateRoute rolesPermitidos={["administrador"]}>
-              <AdminPage />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/admin/usuarios"
-          element={
-            <PrivateRoute rolesPermitidos={["administrador"]}>
-              <GestionUsuariosPage />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/admin/productos"
-          element={
-            <PrivateRoute rolesPermitidos={["administrador"]}>
-              <GestionProductosPage />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/admin/reportes"
-          element={
-            <PrivateRoute rolesPermitidos={["administrador"]}>
-              <ReportesAdminPage />
-            </PrivateRoute>
-          }
-        />
+          {/* NUEVO: Ruta de cambio de contraseña, accesible para cualquier usuario autenticado */}
+          <Route
+            path="/cambiar-contrasena"
+            element={
+              <PrivateRoute rolesPermitidos={["administrador", "cliente", "vendedor", "bodeguero", "contador"]}>
+                <CambiarContrasenaPage />
+              </PrivateRoute>
+            }
+          />
 
-        {/* Rutas protegidas de otros roles */}
-        <Route
-          path="/vendedor"
-          element={
-            <PrivateRoute rolesPermitidos={["vendedor"]}>
-              <VendedorPage />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/bodeguero"
-          element={
-            <PrivateRoute rolesPermitidos={["bodeguero"]}>
-              <BodegueroPage />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/perfil"
-          element={
-            <PrivateRoute rolesPermitidos={["cliente"]}>
-              <PerfilPage />
-            </PrivateRoute>
-          }
-        />
-        {/* Nuevo: Carrito solo para cliente */}
-        <Route
-          path="/carrito"
-          element={
-            <PrivateRoute rolesPermitidos={["cliente"]}>
-              <CarritoPage />
-            </PrivateRoute>
-          }
-        />
-      </Routes>
+          {/* Panel ADMIN + rutas internas protegidas */}
+          <Route
+            path="/admin"
+            element={
+              <PrivateRoute rolesPermitidos={["administrador"]}>
+                <AdminPage />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/admin/usuarios"
+            element={
+              <PrivateRoute rolesPermitidos={["administrador"]}>
+                <GestionUsuariosPage />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/admin/productos"
+            element={
+              <PrivateRoute rolesPermitidos={["administrador"]}>
+                <GestionProductosPage />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/admin/reportes"
+            element={
+              <PrivateRoute rolesPermitidos={["administrador"]}>
+                <ReportesAdminPage />
+              </PrivateRoute>
+            }
+          />
+
+          {/* Rutas protegidas de otros roles */}
+          <Route
+            path="/vendedor"
+            element={
+              <PrivateRoute rolesPermitidos={["vendedor"]}>
+                <VendedorPage />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/bodeguero"
+            element={
+              <PrivateRoute rolesPermitidos={["bodeguero"]}>
+                <BodegueroPage />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/perfil"
+            element={
+              <PrivateRoute rolesPermitidos={["cliente"]}>
+                <PerfilPage />
+              </PrivateRoute>
+            }
+          />
+          {/* Nuevo: Carrito solo para cliente */}
+          <Route
+            path="/carrito"
+            element={
+              <PrivateRoute rolesPermitidos={["cliente"]}>
+                <CarritoPage />
+              </PrivateRoute>
+            }
+          />
+          <Route path="/recuperar-contrasena" element={<RecuperarContrasenaPage />} />
+        </Routes>
+      </div>
       <FooterFerremas />
     </Router>
   );

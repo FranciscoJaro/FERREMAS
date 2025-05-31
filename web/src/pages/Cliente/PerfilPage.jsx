@@ -47,10 +47,10 @@ export default function PerfilPage() {
     setMsg(null);
   };
 
-  // Solo permite números y opcional "+" al inicio
+ 
   const handleTelefonoChange = (e) => {
     let val = e.target.value;
-    if (/^\+?\d*$/.test(val)) { // Permite "+" al inicio y luego solo dígitos
+    if (/^\+?\d*$/.test(val)) {
       setForm((f) => ({ ...f, telefono: val }));
       setTelefonoError("");
     } else {

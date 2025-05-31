@@ -31,7 +31,10 @@ class UsuarioUpdate(BaseModel):
     apellido_paterno: Optional[str] = None
     apellido_materno: Optional[str] = None
     # tipo_usuario: Optional[str] = None # NO se debe editar el tipo
+    
 
+class CambioContrasenaModel(BaseModel):
+    contrasena: str
 # ---------- ENDPOINTS PRINCIPALES ----------
 
 @router.get("/")
@@ -281,7 +284,7 @@ def login(data: LoginData):
         conn = get_conexion()
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT id_usuario, rut, primer_nombre, correo, tipo_usuario
+            SELECT id_usuario, rut, primer_nombre, correo, tipo_usuario, cambiar_contrasena
             FROM usuario
             WHERE correo = :correo AND contrasena = :contrasena
         """, {
@@ -299,7 +302,8 @@ def login(data: LoginData):
                     "rut": usuario[1],
                     "nombre": usuario[2],
                     "correo": usuario[3],  # <-- ahora sí
-                    "tipo_usuario": usuario[4]
+                    "tipo_usuario": usuario[4],
+                    "cambiar_contrasena": usuario[5]
                 }
             }
         else:
@@ -307,32 +311,53 @@ def login(data: LoginData):
     except Exception as ex:
         raise HTTPException(status_code=500, detail=str(ex))
 
-# ---------------------------------------------------------------
-# ------------- FUNCIONES AVANZADAS NO USADAS -------------------
-# ---------------------------------------------------------------
-# class CambioTipoUsuario(BaseModel):
-#     nuevo_tipo: str
-#     datos_extra: dict = {}
 
-# @router.post("/{rut}/cambiar_tipo")
-# def cambiar_tipo_usuario(rut: str, cambio: CambioTipoUsuario):
-#     """
-#     CAMBIO DE TIPO DE USUARIO: NO USADO POR RIESGO DE INTEGRIDAD REFERENCIAL.
-#     Se deja como referencia para desarrollos futuros (NO habilitado en frontend).
-#     """
-#     try:
-#         conn = get_conexion()
-#         cursor = conn.cursor()
-#         cursor.execute("SELECT id_usuario, tipo_usuario FROM usuario WHERE rut = :rut", {"rut": rut})
-#         fila = cursor.fetchone()
-#         if not fila:
-#             raise HTTPException(status_code=404, detail="Usuario no encontrado")
-#         id_usuario, tipo_actual = fila
-#         nuevo_tipo = cambio.nuevo_tipo
-#         # Aquí iría la lógica de eliminar/insertar en subtablas
-#         conn.commit()
-#         cursor.close()
-#         conn.close()
-#         return {"mensaje": f"Tipo de usuario cambiado correctamente a {nuevo_tipo}"}
-#     except Exception as ex:
-#         raise HTTPException(status_code=500, detail=str(ex))
+
+
+@router.put("/{id_usuario}/cambiar_contrasena")
+def cambiar_contrasena(id_usuario: int, datos: CambioContrasenaModel):
+    try:
+        conn = get_conexion()
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE usuario
+            SET contrasena = :contrasena, cambiar_contrasena = 0
+            WHERE id_usuario = :id_usuario
+        """, {
+            "contrasena": datos.contrasena,
+            "id_usuario": id_usuario
+        })
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return {"mensaje": "Contraseña actualizada"}
+    except Exception as ex:
+        raise HTTPException(status_code=500, detail=str(ex))
+    
+    
+    
+
+@router.put("/recuperar/{rut}")
+def recuperar_contrasena(rut: str, datos: CambioContrasenaModel):
+    """
+    Permite solo a clientes recuperar la contraseña por RUT.
+    """
+    try:
+        conn = get_conexion()
+        cursor = conn.cursor()
+        # Verifica que exista y sea cliente
+        cursor.execute("SELECT id_usuario FROM usuario WHERE rut=:rut AND tipo_usuario='cliente'", {"rut": rut})
+        fila = cursor.fetchone()
+        if not fila:
+            raise HTTPException(status_code=404, detail="Solo los clientes pueden recuperar su contraseña")
+        id_usuario = fila[0]
+        cursor.execute(
+            "UPDATE usuario SET contrasena = :contrasena WHERE id_usuario = :id_usuario",
+            {"contrasena": datos.contrasena, "id_usuario": id_usuario}
+        )
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return {"mensaje": "Contraseña actualizada"}
+    except Exception as ex:
+        raise HTTPException(status_code=500, detail=str(ex))

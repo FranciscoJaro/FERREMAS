@@ -1,3 +1,4 @@
+SET DEFINE OFF;
 -- DETALLE_PEDIDO
 BEGIN
   EXECUTE IMMEDIATE 'DROP TABLE DETALLE_PEDIDO CASCADE CONSTRAINTS';
@@ -179,7 +180,8 @@ CREATE TABLE USUARIO (
   primer_nombre    VARCHAR2(50)  NOT NULL,
   segundo_nombre   VARCHAR2(50),
   apellido_paterno VARCHAR2(50)  NOT NULL,
-  apellido_materno VARCHAR2(50)  NOT NULL
+  apellido_materno VARCHAR2(50)  NOT NULL,
+  cambiar_contrasena NUMBER(1) DEFAULT 1
 );
 
 CREATE TABLE ADMINISTRADOR (
@@ -227,6 +229,7 @@ CREATE TABLE PRODUCTO (
   descripcion   VARCHAR2(250) NOT NULL,
   precio        NUMBER(10,2)  NOT NULL,
   stock         NUMBER        NOT NULL,
+  imagen        VARCHAR2(400),
   id_sucursal   NUMBER        NOT NULL,
   id_modelo     NUMBER        NOT NULL,
   CONSTRAINT fk_producto_sucursal FOREIGN KEY(id_sucursal)
@@ -373,14 +376,14 @@ INSERT INTO VENDEDOR  (id_usuario, id_sucursal) VALUES (5, 1);
 
 -- 7) Productos
 INSERT INTO PRODUCTO (
-  id_producto, nombre, descripcion, precio, stock, id_sucursal, id_modelo
+  id_producto, nombre, descripcion, precio, stock, imagen, id_sucursal, id_modelo
 ) VALUES (
-  1, 'Taladro Bosch', 'Modelo 500W percutor', 59990, 15, 1, 1
+  1, 'Taladro Bosch', 'Modelo 500W percutor', 59990, 15,'https://images.unsplash.com/photo-1519125323398-675f0ddb6308?auto=format&fit=crop&w=400&q=80', 1, 1
 );
 INSERT INTO PRODUCTO (
-  id_producto, nombre, descripcion, precio, stock, id_sucursal, id_modelo
+  id_producto, nombre, descripcion, precio, stock, imagen, id_sucursal, id_modelo
 ) VALUES (
-  2, 'Sierra Makita','Circular 185 mm', 74990, 10, 2, 2
+  2, 'Sierra Makita','Circular 185 mm', 74990, 10,'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=400&q=80', 2, 2
 );
 
 -- 8) Carrito y su detalle
@@ -428,13 +431,18 @@ INSERT INTO REPORTE_FINANCIERO (
   1, SYSDATE, 'Balance mensual', 3
 );
 
-COMMIT;
 
--- AGREGAR IMAGEN SI NO EXISTE
-ALTER TABLE PRODUCTO ADD (imagen VARCHAR2(400));
-SET DEFINE OFF;
-UPDATE PRODUCTO SET imagen = 'https://images.unsplash.com/photo-1519125323398-675f0ddb6308?auto=format&fit=crop&w=400&q=80' WHERE id_producto = 1;
-UPDATE PRODUCTO SET imagen = 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=400&q=80' WHERE id_producto = 2;
 SET DEFINE ON;
-
 COMMIT;
+
+
+
+
+
+
+
+
+
+
+
+
