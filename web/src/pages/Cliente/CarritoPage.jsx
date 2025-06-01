@@ -12,6 +12,8 @@ export default function CarritoPage() {
   const [msg, setMsg] = useState("");
   const [dolar, setDolar] = useState(null);
   const paypalRef = useRef();
+  const [tipoEntrega, setTipoEntrega] = useState("DOMICILIO");
+  const [paypalLoaded, setPaypalLoaded] = useState(false);
 
   // Carga el valor del dólar una sola vez
   useEffect(() => {
@@ -55,11 +57,21 @@ export default function CarritoPage() {
     }
   };
 
-  // Cambiar cantidad y guardar automáticamente
+  // Cambiar cantidad y guardar automáticamente, NO PERMITIR MÁS QUE EL STOCK
   const handleCantidadChange = async (id_detalle, cantidad) => {
+    cantidad = Number(cantidad);
     if (cantidad < 1) return;
+    const prod = productos.find(p => p.id_detalle_carrito === id_detalle);
+    if (!prod) return;
+
+    // Aquí es importante que en tu API el carrito incluya "stock" para cada producto.
+    if (prod.stock !== undefined && cantidad > prod.stock) {
+      setMsg(`No puedes comprar más de ${prod.stock} unidades de este producto (Stock máximo disponible).`);
+      return;
+    }
+
     const nuevaLista = productos.map(p =>
-      p.id_detalle_carrito === id_detalle ? { ...p, cantidad: Number(cantidad) } : p
+      p.id_detalle_carrito === id_detalle ? { ...p, cantidad } : p
     );
     setProductos(nuevaLista);
     try {
@@ -79,8 +91,6 @@ export default function CarritoPage() {
   const totalUSD = dolar ? Math.round((totalCLP / dolar) * 100) / 100 : 0;
 
   // PayPal: solo una vez, y cambia el "key" del div para forzar rerender seguro
-  const [paypalLoaded, setPaypalLoaded] = useState(false);
-
   useEffect(() => {
     if (!paypalLoaded) {
       const script = document.createElement("script");
@@ -114,18 +124,16 @@ export default function CarritoPage() {
       onApprove: (data, actions) => {
         return actions.order.capture().then(async function (details) {
           setMsg("¡Pago realizado correctamente! Generando pedido...");
-
-          // Llama a tu API para crear el pedido real
           try {
             const resp = await fetch("http://localhost:4000/pedido/crear-desde-carrito", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ id_usuario: usuario.id_usuario })
+              body: JSON.stringify({ id_usuario: usuario.id_usuario, tipo_entrega: tipoEntrega })
             });
             const result = await resp.json();
             if (resp.ok) {
               setMsg("¡Pedido generado correctamente! ID: " + result.id_pedido);
-              setProductos([]); // Limpia el carrito visualmente
+              setProductos([]);
             } else {
               setMsg("Error al generar pedido: " + (result.error || "Error desconocido"));
             }
@@ -139,7 +147,7 @@ export default function CarritoPage() {
       }
     }).render(paypalRef.current);
     // eslint-disable-next-line
-  }, [paypalLoaded, totalUSD]);
+  }, [paypalLoaded, totalUSD, tipoEntrega]);
 
   return (
     <div style={{ background: "#f9fafb", minHeight: "87vh" }}>
@@ -168,6 +176,7 @@ export default function CarritoPage() {
                   <th>Precio Unitario</th>
                   <th>Cantidad</th>
                   <th>Subtotal</th>
+                  <th>Stock</th>
                   <th>Acción</th>
                 </tr>
               </thead>
@@ -183,6 +192,7 @@ export default function CarritoPage() {
                       <Form.Control
                         type="number"
                         min={1}
+                        max={prod.stock !== undefined ? prod.stock : 9999}
                         value={prod.cantidad}
                         style={{ width: 60 }}
                         onChange={e => handleCantidadChange(prod.id_detalle_carrito, e.target.value)}
@@ -190,6 +200,9 @@ export default function CarritoPage() {
                     </td>
                     <td className="text-center fw-bold">
                       ${Number(prod.precio_unitario * prod.cantidad).toLocaleString("es-CL")}
+                    </td>
+                    <td className="text-center">
+                      {prod.stock !== undefined ? prod.stock : "?"}
                     </td>
                     <td className="text-center">
                       <Button
@@ -204,6 +217,21 @@ export default function CarritoPage() {
                 ))}
               </tbody>
             </Table>
+
+            {/* Tipo de entrega */}
+            <Card className="mb-3 border-0 shadow-sm">
+              <Card.Body>
+                <Form.Group as={Row} className="mb-0 align-items-center">
+                  <Form.Label column sm={4} className="fw-semibold">Tipo de entrega:</Form.Label>
+                  <Col sm={8}>
+                    <Form.Select value={tipoEntrega} onChange={e => setTipoEntrega(e.target.value)}>
+                      <option value="DOMICILIO">Despacho a domicilio</option>
+                      <option value="RETIRO">Retiro en tienda</option>
+                    </Form.Select>
+                  </Col>
+                </Form.Group>
+              </Card.Body>
+            </Card>
 
             {/* Resumen */}
             <Row className="justify-content-end mt-4">
@@ -223,8 +251,7 @@ export default function CarritoPage() {
                       <span>Total a pagar (USD):</span>
                       <span className="fw-bold text-info">${totalUSD}</span>
                     </div>
-                    {/* Botón PayPal */}
-                    <div ref={paypalRef} key={totalUSD} className="my-3" />
+                    <div ref={paypalRef} key={totalUSD + tipoEntrega} className="my-3" />
                   </Card.Body>
                 </Card>
               </Col>

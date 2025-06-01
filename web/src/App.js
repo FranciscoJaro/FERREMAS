@@ -23,6 +23,8 @@ import PerfilPage from './pages/Cliente/PerfilPage';
 // Nuevo: Página de carrito (cliente)
 import CarritoPage from './pages/Cliente/CarritoPage';
 
+//pagina contador
+import ReportesFinancierosPage from './pages/Contador/ReportesFinancierosPage';
 // **NUEVO: Página de cambio de contraseña**
 import CambiarContrasenaPage from './pages/CambiarContrasenaPage';
 import RecuperarContrasenaPage from './pages/RecuperarContrasenaPage';
@@ -119,6 +121,14 @@ function App() {
               <PrivateRoute rolesPermitidos={["cliente"]}>
                 <CarritoPage />
               </PrivateRoute>
+            }
+          />
+          <Route
+            path="/contador"
+            element={
+               <PrivateRoute rolesPermitidos={["contador"]}>
+                 <ReportesFinancierosPage />
+             </PrivateRoute>
             }
           />
           <Route path="/recuperar-contrasena" element={<RecuperarContrasenaPage />} />

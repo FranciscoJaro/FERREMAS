@@ -42,6 +42,8 @@ export default function LoginPage() {
             window.location.href = "/vendedor";
           } else if (data.usuario.tipo_usuario === "bodeguero") {
             window.location.href = "/bodeguero";
+          } else if (data.usuario.tipo_usuario === "contador") {
+            window.location.href = "/contador";
           } else {
             window.location.href = "/";
           }

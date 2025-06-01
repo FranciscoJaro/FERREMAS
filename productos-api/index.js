@@ -11,13 +11,13 @@ const dbConfig = {
   password: 'ferremas123',
   connectString: 'localhost:1521/xe'
 };
-// Puerto
+
 const PORT = 4000;
 app.listen(PORT, () => {
   console.log(`API de productos corriendo en http://localhost:${PORT}`);
 });
 
-// Listar sucursales 
+// ========== SUCURSALES ==========
 app.get('/sucursales', async (req, res) => {
   let connection;
   try {
@@ -37,7 +37,7 @@ app.get('/sucursales', async (req, res) => {
   }
 });
 
-// Listar modelos
+// ========== MODELOS ==========
 app.get('/modelos', async (req, res) => {
   let connection;
   try {
@@ -57,7 +57,7 @@ app.get('/modelos', async (req, res) => {
   }
 });
 
-// Obtener todos los productos
+// ========== PRODUCTOS ==========
 app.get('/productos', async (req, res) => {
   let connection;
   try {
@@ -85,19 +85,15 @@ app.get('/productos', async (req, res) => {
   }
 });
 
-// Agregar producto
 app.post('/productos', async (req, res) => {
   const { nombre, descripcion, precio, stock, id_sucursal, id_modelo, imagen } = req.body;
   let connection;
   try {
     connection = await oracledb.getConnection(dbConfig);
-    const resultId = await connection.execute(
-      "SELECT NVL(MAX(id_producto),0)+1 FROM producto"
-    );
+    const resultId = await connection.execute("SELECT NVL(MAX(id_producto),0)+1 FROM producto");
     const nextId = resultId.rows[0][0];
     await connection.execute(
-      `INSERT INTO producto 
-       (id_producto, nombre, descripcion, precio, stock, id_sucursal, id_modelo, imagen) 
+      `INSERT INTO producto (id_producto, nombre, descripcion, precio, stock, id_sucursal, id_modelo, imagen)
        VALUES (:id, :nombre, :descripcion, :precio, :stock, :id_sucursal, :id_modelo, :imagen)`,
       {
         id: nextId,
@@ -119,7 +115,6 @@ app.post('/productos', async (req, res) => {
   }
 });
 
-// Editar producto
 app.put('/productos/:id_producto', async (req, res) => {
   const { id_producto } = req.params;
   const { nombre, descripcion, precio, stock, id_sucursal, id_modelo, imagen } = req.body;
@@ -155,7 +150,6 @@ app.put('/productos/:id_producto', async (req, res) => {
   }
 });
 
-// Eliminar producto
 app.delete('/productos/:id_producto', async (req, res) => {
   const { id_producto } = req.params;
   let connection;
@@ -177,9 +171,8 @@ app.delete('/productos/:id_producto', async (req, res) => {
     if (connection) await connection.close();
   }
 });
-/////////////////////////////////////////////////////////////
 
-// Obtener reportes financieros
+// ========== REPORTES FINANCIEROS ==========
 app.get('/reportes-financieros', async (req, res) => {
   let connection;
   try {
@@ -207,9 +200,8 @@ app.get('/reportes-financieros', async (req, res) => {
     if (connection) await connection.close();
   }
 });
-//////////////////////////////////////////////////////////////
 
-// OBTENER PEDIDOS DE UN VENDEDOR (incluye detalle)
+// ========== PEDIDOS ==========
 app.get('/pedidos', async (req, res) => {
   const vendedor_id = req.query.vendedor_id;
   if (!vendedor_id) return res.status(400).json({ error: "Falta vendedor_id" });
@@ -218,7 +210,6 @@ app.get('/pedidos', async (req, res) => {
   try {
     connection = await oracledb.getConnection(dbConfig);
 
-    // Usa los nombres de columna REALES
     const pedidosRes = await connection.execute(
       `SELECT 
          p.id_pedido, p.fecha, p.estado_entrega,
@@ -232,7 +223,6 @@ app.get('/pedidos', async (req, res) => {
 
     const pedidos = [];
     for (const row of pedidosRes.rows) {
-      // Trae los productos del pedido
       const productosRes = await connection.execute(
         `SELECT pr.nombre, dp.cantidad 
          FROM detalle_pedido dp
@@ -243,7 +233,7 @@ app.get('/pedidos', async (req, res) => {
       pedidos.push({
         id_pedido: row[0],
         fecha: row[1],
-        estado: row[2], // <--- OJO: Este campo viene de estado_entrega
+        estado: row[2],
         cliente_nombre: row[3],
         productos: productosRes.rows.map(rp => ({
           nombre: rp[0],
@@ -259,7 +249,6 @@ app.get('/pedidos', async (req, res) => {
   }
 });
 
-// CAMBIAR ESTADO DEL PEDIDO
 app.put('/pedidos/:id_pedido/estado', async (req, res) => {
   const { id_pedido } = req.params;
   const { estado } = req.body;
@@ -284,17 +273,69 @@ app.put('/pedidos/:id_pedido/estado', async (req, res) => {
     if (connection) await connection.close();
   }
 });
-/////////////////////////////////////////////////////////
-// ======================== CARRITO =======================
 
-// Obtener el carrito de un usuario (lista de productos en el carrito)
+//////////////////////////////////
+
+// Obtener pedidos de un cliente por id_usuario
+app.get('/pedidos-cliente/:id_usuario', async (req, res) => {
+  const { id_usuario } = req.params;
+  let connection;
+  try {
+    connection = await oracledb.getConnection(dbConfig);
+
+    // Busca pedidos del cliente, con suma total y productos
+    const pedidosRes = await connection.execute(
+      `SELECT p.id_pedido, p.fecha, p.estado_entrega, p.tipo_entrega
+        FROM pedido p
+        WHERE p.cliente_id_usuario = :id_usuario
+        ORDER BY p.fecha DESC`,
+      { id_usuario }
+    );
+    const pedidos = [];
+    for (const row of pedidosRes.rows) {
+      // Productos y total de cada pedido
+      const productosRes = await connection.execute(
+        `SELECT pr.nombre, dp.cantidad, dp.precio_unitario
+         FROM detalle_pedido dp
+         JOIN producto pr ON dp.producto_id_producto = pr.id_producto
+         WHERE dp.pedido_id_pedido = :id_pedido`,
+        { id_pedido: row[0] }
+      );
+      const productos = productosRes.rows.map(r => ({
+        nombre: r[0],
+        cantidad: r[1],
+        precio_unitario: r[2]
+      }));
+      // Calcular total
+      const total = productos.reduce((sum, p) => sum + (p.cantidad * p.precio_unitario), 0);
+      pedidos.push({
+        id_pedido: row[0],
+        fecha: row[1],
+        estado: row[2],
+        tipo_entrega: row[3],
+        total,
+        productos
+      });
+    }
+    res.json(pedidos);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  } finally {
+    if (connection) await connection.close();
+  }
+});
+
+
+
+
+
+// ========== CARRITO ==========
 app.get('/carrito/:id_usuario', async (req, res) => {
   const { id_usuario } = req.params;
   let connection;
   try {
     connection = await oracledb.getConnection(dbConfig);
 
-    // Trae el carrito actual (el más reciente en estado "CREADO")
     const carritoRes = await connection.execute(
       `SELECT id_carrito, fecha_creacion, estado FROM carrito 
         WHERE cliente_id_usuario = :id_usuario AND estado = 'CREADO'
@@ -310,9 +351,8 @@ app.get('/carrito/:id_usuario', async (req, res) => {
       estado: carritoRes.rows[0][2]
     };
 
-    // Trae productos en el carrito
     const productosRes = await connection.execute(
-      `SELECT dc.id_detalle_carrito, p.nombre, p.descripcion, dc.cantidad, dc.precio_unitario, p.imagen
+      `SELECT dc.id_detalle_carrito, p.nombre, p.descripcion, dc.cantidad, dc.precio_unitario, p.imagen, p.stock
         FROM detalle_carrito dc
         JOIN producto p ON dc.producto_id = p.id_producto
         WHERE dc.carrito_id = :carrito_id`,
@@ -324,7 +364,8 @@ app.get('/carrito/:id_usuario', async (req, res) => {
       descripcion: row[2],
       cantidad: row[3],
       precio_unitario: row[4],
-      imagen: row[5]
+      imagen: row[5],
+      stock: row[6]      // <<--- STOCK ACTUAL DE PRODUCTO
     }));
 
     res.json({ carrito, productos });
@@ -335,7 +376,6 @@ app.get('/carrito/:id_usuario', async (req, res) => {
   }
 });
 
-// Agregar producto al carrito (SOLO una vez, bien implementado)
 app.post('/carrito/agregar', async (req, res) => {
   const { id_usuario, id_producto, cantidad } = req.body;
   if (!id_usuario || !id_producto || !cantidad) {
@@ -346,14 +386,12 @@ app.post('/carrito/agregar', async (req, res) => {
   try {
     connection = await oracledb.getConnection(dbConfig);
 
-    // Buscar el carrito "CREADO" del cliente, si no existe crear uno
     let result = await connection.execute(
       "SELECT id_carrito FROM carrito WHERE cliente_id_usuario=:id_usuario AND estado='CREADO'",
       { id_usuario }
     );
     let id_carrito;
     if (result.rows.length === 0) {
-      // Crear carrito nuevo
       const resMax = await connection.execute("SELECT NVL(MAX(id_carrito),0)+1 FROM carrito");
       id_carrito = resMax.rows[0][0];
       await connection.execute(
@@ -365,17 +403,14 @@ app.post('/carrito/agregar', async (req, res) => {
       id_carrito = result.rows[0][0];
     }
 
-    // Verifica si el producto ya está en el carrito
     result = await connection.execute(
       "SELECT id_detalle_carrito, cantidad FROM detalle_carrito WHERE carrito_id=:id_carrito AND producto_id=:id_producto",
       { id_carrito, id_producto }
     );
     if (result.rows.length === 0) {
-      // Insertar nuevo detalle
       const resMaxDet = await connection.execute("SELECT NVL(MAX(id_detalle_carrito),0)+1 FROM detalle_carrito");
       const id_detalle_carrito = resMaxDet.rows[0][0];
 
-      // Obtener precio actual
       const precioRes = await connection.execute(
         "SELECT precio FROM producto WHERE id_producto=:id_producto",
         { id_producto }
@@ -389,7 +424,6 @@ app.post('/carrito/agregar', async (req, res) => {
         { autoCommit: true }
       );
     } else {
-      // Ya existe, actualiza la cantidad
       const nuevaCantidad = result.rows[0][1] + cantidad;
       await connection.execute(
         "UPDATE detalle_carrito SET cantidad=:nuevaCantidad WHERE id_detalle_carrito=:id_detalle_carrito",
@@ -406,7 +440,6 @@ app.post('/carrito/agregar', async (req, res) => {
   }
 });
 
-// Eliminar producto del carrito
 app.delete('/carrito/eliminar/:id_detalle_carrito', async (req, res) => {
   const { id_detalle_carrito } = req.params;
   let connection;
@@ -429,14 +462,12 @@ app.delete('/carrito/eliminar/:id_detalle_carrito', async (req, res) => {
   }
 });
 
-// Vaciar carrito (opcional)
 app.delete('/carrito/vaciar/:id_usuario', async (req, res) => {
   const { id_usuario } = req.params;
   let connection;
   try {
     connection = await oracledb.getConnection(dbConfig);
 
-    // Encuentra el carrito "CREADO"
     const carritoRes = await connection.execute(
       `SELECT id_carrito FROM carrito WHERE cliente_id_usuario = :id_usuario AND estado = 'CREADO'`,
       { id_usuario }
@@ -459,8 +490,6 @@ app.delete('/carrito/vaciar/:id_usuario', async (req, res) => {
   }
 });
 
-
-//  Actualizar cantidad de un producto en el carrito --------
 app.put('/carrito/actualizar-cantidad/:id_detalle_carrito', async (req, res) => {
   const { id_detalle_carrito } = req.params;
   const { cantidad } = req.body;
@@ -487,10 +516,7 @@ app.put('/carrito/actualizar-cantidad/:id_detalle_carrito', async (req, res) => 
   }
 });
 
-
-
-////BODEGUERO
-// OBTENER PEDIDOS PARA BODEGUERO
+// ========== PEDIDOS BODEGUERO ==========
 app.get('/pedidos-bodega', async (req, res) => {
   const bodeguero_id = req.query.bodeguero_id;
   if (!bodeguero_id) return res.status(400).json({ error: "Falta bodeguero_id" });
@@ -498,7 +524,6 @@ app.get('/pedidos-bodega', async (req, res) => {
   let connection;
   try {
     connection = await oracledb.getConnection(dbConfig);
-    // Solo los pedidos que necesita preparar el bodeguero
     const pedidosRes = await connection.execute(
       `SELECT 
          p.id_pedido, p.fecha, p.estado_entrega, 
@@ -510,7 +535,6 @@ app.get('/pedidos-bodega', async (req, res) => {
     );
     const pedidos = [];
     for (const row of pedidosRes.rows) {
-      // Trae los productos del pedido
       const productosRes = await connection.execute(
         `SELECT pr.nombre, dp.cantidad 
          FROM detalle_pedido dp
@@ -537,13 +561,11 @@ app.get('/pedidos-bodega', async (req, res) => {
   }
 });
 
-
-
-/////////////////////////////////////////////////
-// Crear pedido desde carrito (después de pagar)
+// ========== CREAR PEDIDO DESDE CARRITO ==========
 app.post('/pedido/crear-desde-carrito', async (req, res) => {
-  const { id_usuario } = req.body;
+  const { id_usuario, tipo_entrega } = req.body;
   if (!id_usuario) return res.status(400).json({ error: "Falta id_usuario" });
+
   let connection;
   try {
     connection = await oracledb.getConnection(dbConfig);
@@ -574,21 +596,24 @@ app.post('/pedido/crear-desde-carrito', async (req, res) => {
     const id_pedido = pedidoRes.rows[0][0];
 
     // 4. Traer datos de roles asignados automáticamente
-    // (Aquí deberías ajustar según tu lógica real)
     const id_vendedor = 5;    // ejemplo
     const id_bodeguero = 4;   // ejemplo
     const id_contador = 3;    // ejemplo
     const id_sucursal = 1;    // ejemplo
 
-    // 5. Crear el pedido
+    // 5. Elegir tipo de entrega
+    const tipo = (tipo_entrega && (tipo_entrega === "DOMICILIO" || tipo_entrega === "RETIRO")) ? tipo_entrega : "DOMICILIO";
+
+    // 6. Crear el pedido
     await connection.execute(
       `INSERT INTO pedido (id_pedido, fecha, estado_entrega, tipo_entrega,
         cliente_id_usuario, bodeguero_id_usuario, contador_id_usuario,
         carrito_id_carrito, vendedor_id_usuario, sucursal_id_sucursal)
-      VALUES (:id_pedido, SYSDATE, 'PENDIENTE', 'DOMICILIO',
+      VALUES (:id_pedido, SYSDATE, 'PENDIENTE', :tipo_entrega,
         :cliente, :bodeguero, :contador, :carrito, :vendedor, :sucursal)`,
       {
         id_pedido,
+        tipo_entrega: tipo,
         cliente: id_usuario,
         bodeguero: id_bodeguero,
         contador: id_contador,
@@ -598,7 +623,7 @@ app.post('/pedido/crear-desde-carrito', async (req, res) => {
       }
     );
 
-    // 6. Crear los detalles y restar stock
+    // 7. Crear los detalles y restar stock
     for (const [producto_id, cantidad, precio_unitario] of productos) {
       const id_detalleRes = await connection.execute("SELECT NVL(MAX(id_detalle_pedido),0)+1 FROM detalle_pedido");
       const id_detalle_pedido = id_detalleRes.rows[0][0];
@@ -613,13 +638,36 @@ app.post('/pedido/crear-desde-carrito', async (req, res) => {
       );
     }
 
-    // 7. Cambia estado del carrito a USADO
+    // ========== AGREGADO: INSERTAR EL PAGO ==========
+    const pagoRes = await connection.execute("SELECT NVL(MAX(id_pago),0)+1 FROM pago");
+    const id_pago = pagoRes.rows[0][0];
+    await connection.execute(
+      `INSERT INTO pago (
+        id_pago, metodo_pago, estado_pago, fecha_pago,
+        confirmar_por, pedido_id_pedido, usuario_id_usuario, cliente_id_usuario
+      ) VALUES (
+        :id_pago, :metodo_pago, :estado_pago, SYSDATE,
+        :confirmar_por, :pedido_id_pedido, :usuario_id_usuario, :cliente_id_usuario
+      )`,
+      {
+        id_pago,
+        metodo_pago: 'PAYPAL',
+        estado_pago: 'CONFIRMADO',
+        confirmar_por: id_contador,
+        pedido_id_pedido: id_pedido,
+        usuario_id_usuario: id_usuario,
+        cliente_id_usuario: id_usuario
+      }
+    );
+    // ========== FIN INSERTAR EL PAGO ==========
+
+    // 8. Cambia estado del carrito a USADO
     await connection.execute(
       `UPDATE carrito SET estado='USADO' WHERE id_carrito=:id_carrito`,
       { id_carrito }
     );
 
-    // 8. Borra detalles del carrito para limpiar (opcional)
+    // 9. Borra detalles del carrito para limpiar (opcional)
     await connection.execute(
       `DELETE FROM detalle_carrito WHERE carrito_id = :id_carrito`,
       { id_carrito }
@@ -634,9 +682,76 @@ app.post('/pedido/crear-desde-carrito', async (req, res) => {
   }
 });
 
+////////////////////////////////
+
+
+// Crear nuevo reporte financiero (guarda ventas_mes y concatena en el detalle)
+app.post('/reportes-financieros', async (req, res) => {
+  const { detalle, contador_id_usuario } = req.body;
+  if (!detalle || !contador_id_usuario) return res.status(400).json({ error: "Faltan datos" });
+  let connection;
+  try {
+    connection = await oracledb.getConnection(dbConfig);
+
+    // 1. Calcula ventas totales del mes actual
+    const ventasMesRes = await connection.execute(`
+      SELECT NVL(SUM(dp.cantidad * dp.precio_unitario), 0)
+      FROM pedido p
+      JOIN detalle_pedido dp ON p.id_pedido = dp.pedido_id_pedido
+      WHERE TO_CHAR(p.fecha, 'MM-YYYY') = TO_CHAR(SYSDATE, 'MM-YYYY')
+    `);
+    const total_ventas_mes = ventasMesRes.rows[0][0];
+
+    // 2. Genera nuevo id_reporte
+    const idRes = await connection.execute("SELECT NVL(MAX(id_reporte),0)+1 FROM REPORTE_FINANCIERO");
+    const id_reporte = idRes.rows[0][0];
+
+    // 3. Prepara detalle (opcional: muestra ventas también en detalle)
+    const detalleConVentas = `${detalle} | Ventas totales del mes: $${Number(total_ventas_mes).toLocaleString("es-CL")}`;
+
+    // 4. Inserta reporte con ventas_mes
+    await connection.execute(
+      `INSERT INTO REPORTE_FINANCIERO (id_reporte, fecha, detalle, ventas_mes, contador_id_usuario)
+       VALUES (:id_reporte, SYSDATE, :detalle, :ventas_mes, :contador_id_usuario)`,
+      { id_reporte, detalle: detalleConVentas, ventas_mes: total_ventas_mes, contador_id_usuario },
+      { autoCommit: true }
+    );
+    res.json({ mensaje: "Reporte creado correctamente", id_reporte });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  } finally {
+    if (connection) await connection.close();
+  }
+});
+
+
+// Endpoint para total de ventas del mes actual
+app.get('/reportes-financieros/ventas-mes', async (req, res) => {
+  let connection;
+  try {
+    connection = await oracledb.getConnection(dbConfig);
+
+    // Ventas de pedidos CONFIRMADOS del mes actual (puedes ajustar el filtro si quieres)
+    const result = await connection.execute(`
+      SELECT NVL(SUM(dp.cantidad * dp.precio_unitario), 0) AS total_ventas
+      FROM pedido p
+      JOIN detalle_pedido dp ON p.id_pedido = dp.pedido_id_pedido
+      WHERE 
+        EXTRACT(MONTH FROM p.fecha) = EXTRACT(MONTH FROM SYSDATE)
+        AND EXTRACT(YEAR FROM p.fecha) = EXTRACT(YEAR FROM SYSDATE)
+        AND p.estado_entrega != 'ANULADO'
+    `);
+
+    const total = result.rows[0][0];
+    res.json({ total_ventas_mes: total });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  } finally {
+    if (connection) await connection.close();
+  }
+});
 
 
 
 
-
-// =================== FIN CARRITO ===================
+// ========== FIN ==========

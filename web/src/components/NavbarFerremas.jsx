@@ -13,6 +13,62 @@ export default function NavbarFerremas() {
     window.location.reload();
   };
 
+  const renderLinks = () => {
+    if (!usuario) {
+      return (
+        <>
+          <Nav.Link as={Link} to="/" className="nav-link-custom">Inicio</Nav.Link>
+          <Nav.Link as={Link} to="/sobre-nosotros" className="nav-link-custom">Sobre Nosotros</Nav.Link>
+          <Nav.Link as={Link} to="/contacto" className="nav-link-custom">Contáctenos</Nav.Link>
+        </>
+      );
+    }
+
+    switch (usuario.tipo_usuario) {
+      case "cliente":
+        return (
+          <>
+            <Nav.Link as={Link} to="/" className="nav-link-custom">Inicio</Nav.Link>
+            <Nav.Link as={Link} to="/sobre-nosotros" className="nav-link-custom">Sobre Nosotros</Nav.Link>
+            <Nav.Link as={Link} to="/contacto" className="nav-link-custom">Contáctenos</Nav.Link>
+            <Nav.Link as={Link} to="/perfil" className="nav-link-custom">
+              <FaUserCircle size={21} style={{ marginBottom: 2, marginRight: 4 }} />
+              Mi Perfil
+            </Nav.Link>
+            <Nav.Link as={Link} to="/carrito" className="nav-link-custom">
+              <FaShoppingCart size={22} title="Carrito" />
+            </Nav.Link>
+          </>
+        );
+      case "administrador":
+        return (
+          <>
+            <Nav.Link as={Link} to="/admin" className="nav-link-custom">Panel Admin</Nav.Link>
+          </>
+        );
+      case "vendedor":
+        return (
+          <>
+            <Nav.Link as={Link} to="/vendedor" className="nav-link-custom">Panel Vendedor</Nav.Link>
+          </>
+        );
+      case "bodeguero":
+        return (
+          <>
+            <Nav.Link as={Link} to="/bodeguero" className="nav-link-custom">Panel Bodeguero</Nav.Link>
+          </>
+        );
+      case "contador":
+        return (
+          <>
+            <Nav.Link as={Link} to="/contador" className="nav-link-custom">Panel Contador</Nav.Link>
+          </>
+        );
+      default:
+        return null;
+    }
+  };
+
   return (
     <Navbar
       bg="dark"
@@ -42,24 +98,12 @@ export default function NavbarFerremas() {
         <Navbar.Toggle aria-controls="basic-navbar-nav" />
         <Navbar.Collapse id="basic-navbar-nav">
           <Nav className="me-auto" style={{ fontSize: "1.1rem" }}>
-            <Nav.Link as={Link} to="/" className="nav-link-custom">Inicio</Nav.Link>
-            <Nav.Link as={Link} to="/sobre-nosotros" className="nav-link-custom">Sobre Nosotros</Nav.Link>
-            <Nav.Link as={Link} to="/contacto" className="nav-link-custom">Contáctenos</Nav.Link>
+            {renderLinks()}
           </Nav>
           <Nav className="align-items-center">
             {usuario ? (
               <>
                 <span className="text-light me-2">Hola, {usuario.nombre}</span>
-                {/* SOLO PARA CLIENTES */}
-                {usuario.tipo_usuario === "cliente" && (
-                  <Nav.Link as={Link} to="/perfil" className="ms-1 nav-link-custom">
-                    <FaUserCircle size={21} style={{ marginBottom: 2, marginRight: 4 }} />
-                    Mi Perfil
-                  </Nav.Link>
-                )}
-                <Nav.Link as={Link} to="/carrito" className="ms-3 nav-link-custom">
-                  <FaShoppingCart size={22} title="Carrito" />
-                </Nav.Link>
                 <button
                   className="btn btn-outline-light btn-sm ms-3"
                   onClick={handleLogout}

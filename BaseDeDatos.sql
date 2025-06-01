@@ -327,6 +327,7 @@ CREATE TABLE REPORTE_FINANCIERO (
   id_reporte          NUMBER PRIMARY KEY,
   fecha               DATE         NOT NULL,
   detalle             VARCHAR2(250) NOT NULL,
+  ventas_mes          NUMBER(10,2) NOT NULL,
   contador_id_usuario INTEGER      NOT NULL,
   CONSTRAINT fk_rf_contador FOREIGN KEY(contador_id_usuario)
     REFERENCES CONTADOR(id_usuario)
@@ -426,9 +427,9 @@ INSERT INTO INFORME_VENTA (
 );
 
 INSERT INTO REPORTE_FINANCIERO (
-  id_reporte, fecha, detalle, contador_id_usuario
+  id_reporte, fecha, detalle,ventas_mes, contador_id_usuario
 ) VALUES (
-  1, SYSDATE, 'Balance mensual', 3
+  1, SYSDATE, 'Balance mensual', 5000000, 3
 );
 
 
