@@ -6,7 +6,6 @@ export default function Contacto() {
   return (
     <div style={{ background: "#f6f9fb", minHeight: "85vh", paddingTop: 40 }}>
       <Container className="py-5">
-        {/* Título centrado, grande y con ícono */}
         <div className="text-center mb-5">
           <span style={{ fontSize: 38, color: "#2563eb", verticalAlign: "middle" }}>
             <FaRegPaperPlane />

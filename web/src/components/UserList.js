@@ -1,5 +1,3 @@
-// web/src/components/UserList.js
-
 import { useEffect, useState } from "react";
 
 function UserList() {

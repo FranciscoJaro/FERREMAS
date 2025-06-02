@@ -6,12 +6,8 @@ export default function GestionProductosPage() {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
   const [mensaje, setMensaje] = useState(null);
-
-  // Sucursales y modelos para selects
   const [sucursales, setSucursales] = useState([]);
   const [modelos, setModelos] = useState([]);
-
-  // Modales y estado para agregar/editar
   const [showEditModal, setShowEditModal] = useState(false);
   const [productoEditando, setProductoEditando] = useState(null);
 
@@ -29,7 +25,6 @@ export default function GestionProductosPage() {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [productoAEliminar, setProductoAEliminar] = useState(null);
 
-  // Fetches defensivos
   const fetchProductos = () => {
     setCargando(true);
     fetch("http://localhost:4000/productos")
@@ -117,7 +112,7 @@ export default function GestionProductosPage() {
     setProductoAEliminar(null);
   };
 
-  // Editar producto (abrir modal)
+  // Editar producto 
   const abrirEditar = (p) => {
     setProductoEditando({ ...p });
     setShowEditModal(true);

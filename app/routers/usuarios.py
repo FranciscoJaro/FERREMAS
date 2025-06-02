@@ -30,18 +30,14 @@ class UsuarioUpdate(BaseModel):
     segundo_nombre: Optional[str] = None
     apellido_paterno: Optional[str] = None
     apellido_materno: Optional[str] = None
-    # tipo_usuario: Optional[str] = None # NO se debe editar el tipo
-    
 
 class CambioContrasenaModel(BaseModel):
     contrasena: str
+
 # ---------- ENDPOINTS PRINCIPALES ----------
 
 @router.get("/")
 def obtener_usuarios():
-    """
-    Retorna todos los usuarios (sin mostrar contraseña por seguridad).
-    """
     try:
         conn = get_conexion()
         cursor = conn.cursor()
@@ -68,9 +64,6 @@ def obtener_usuarios():
 
 @router.get("/{rut_buscar}")
 def obtener_usuario(rut_buscar: str):
-    """
-    Retorna un usuario por su RUT.
-    """
     try:
         conn = get_conexion()
         cursor = conn.cursor()
@@ -98,10 +91,6 @@ def obtener_usuario(rut_buscar: str):
 
 @router.post("/")
 def agregar_usuario(usuario: UsuarioRegistro):
-    """
-    Agrega un nuevo usuario del tipo seleccionado por el admin.
-    Inserta también en la subtabla correspondiente (valores por defecto).
-    """
     try:
         conn = get_conexion()
         cursor = conn.cursor()
@@ -137,7 +126,7 @@ def agregar_usuario(usuario: UsuarioRegistro):
         elif usuario.tipo_usuario == "contador":
             cursor.execute("INSERT INTO contador (id_usuario) VALUES (:id)", {"id": next_id})
         elif usuario.tipo_usuario == "cliente":
-            cursor.execute("INSERT INTO cliente (id_usuario, nombre, direccion, telefono) VALUES (:id, 'Sin nombre', 'Sin dirección', '0')", {"id": next_id})
+            pass  # Ahora NO inserta nada aquí
         elif usuario.tipo_usuario == "administrador":
             cursor.execute("INSERT INTO administrador (id_usuario) VALUES (:id)", {"id": next_id})
 
@@ -150,9 +139,6 @@ def agregar_usuario(usuario: UsuarioRegistro):
 
 @router.put("/{rut_actualizar}")
 def actualizar_usuario(rut_actualizar: str, usuario: UsuarioUpdate):
-    """
-    Actualiza los datos personales de un usuario (NO permite cambiar el tipo de usuario).
-    """
     try:
         campos = []
         valores = {"rut": rut_actualizar}
@@ -178,9 +164,6 @@ def actualizar_usuario(rut_actualizar: str, usuario: UsuarioUpdate):
 
 @router.delete("/{rut_eliminar}")
 def eliminar_usuario(rut_eliminar: str):
-    """
-    Elimina un usuario y todas sus dependencias respetando las claves foráneas.
-    """
     try:
         conn = get_conexion()
         cursor = conn.cursor()
@@ -270,16 +253,10 @@ def eliminar_usuario(rut_eliminar: str):
 
 @router.patch("/{rut_actualizar}")
 def actualizar_parcial(rut_actualizar: str, usuario: UsuarioUpdate):
-    """
-    Actualiza parcialmente los datos de un usuario (llama al mismo PUT).
-    """
     return actualizar_usuario(rut_actualizar, usuario)
 
 @router.post("/login")
 def login(data: LoginData):
-    """
-    Login de usuario (devuelve id_usuario, rut, nombre, correo y tipo si es válido).
-    """
     try:
         conn = get_conexion()
         cursor = conn.cursor()
@@ -301,7 +278,7 @@ def login(data: LoginData):
                     "id_usuario": usuario[0],
                     "rut": usuario[1],
                     "nombre": usuario[2],
-                    "correo": usuario[3],  # <-- ahora sí
+                    "correo": usuario[3],
                     "tipo_usuario": usuario[4],
                     "cambiar_contrasena": usuario[5]
                 }
@@ -310,9 +287,6 @@ def login(data: LoginData):
             raise HTTPException(status_code=401, detail="Credenciales incorrectas")
     except Exception as ex:
         raise HTTPException(status_code=500, detail=str(ex))
-
-
-
 
 @router.put("/{id_usuario}/cambiar_contrasena")
 def cambiar_contrasena(id_usuario: int, datos: CambioContrasenaModel):
@@ -333,19 +307,12 @@ def cambiar_contrasena(id_usuario: int, datos: CambioContrasenaModel):
         return {"mensaje": "Contraseña actualizada"}
     except Exception as ex:
         raise HTTPException(status_code=500, detail=str(ex))
-    
-    
-    
 
 @router.put("/recuperar/{rut}")
 def recuperar_contrasena(rut: str, datos: CambioContrasenaModel):
-    """
-    Permite solo a clientes recuperar la contraseña por RUT.
-    """
     try:
         conn = get_conexion()
         cursor = conn.cursor()
-        # Verifica que exista y sea cliente
         cursor.execute("SELECT id_usuario FROM usuario WHERE rut=:rut AND tipo_usuario='cliente'", {"rut": rut})
         fila = cursor.fetchone()
         if not fila:

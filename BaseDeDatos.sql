@@ -302,6 +302,9 @@ CREATE TABLE PAGO (
   estado_pago         VARCHAR2(20) NOT NULL,
   fecha_pago          DATE         NOT NULL,
   confirmar_por       INTEGER      NOT NULL,
+  comprobante         CLOB, -- <-- Guarda base64 o texto largo
+  nombre_archivo      VARCHAR2(200),
+  monto               NUMBER(10,2),
   pedido_id_pedido    INTEGER      NOT NULL,
   usuario_id_usuario  INTEGER      NOT NULL,
   cliente_id_usuario  INTEGER      NOT NULL,
@@ -352,8 +355,20 @@ INSERT INTO SUCURSAL (id_sucursal, descripcion, id_comuna) VALUES (2, 'Costera',
 -- 4) Marcas y Modelos
 INSERT INTO MARCA (id_marca, nombre) VALUES (1, 'Bosch');
 INSERT INTO MARCA (id_marca, nombre) VALUES (2, 'Makita');
+INSERT INTO MARCA (id_marca, nombre) VALUES (3, 'DeWalt');
+INSERT INTO MARCA (id_marca, nombre) VALUES (4, 'Black+Decker');
+INSERT INTO MARCA (id_marca, nombre) VALUES (5, 'Stanley');
+INSERT INTO MARCA (id_marca, nombre) VALUES (6, 'Hilti');
+INSERT INTO MARCA (id_marca, nombre) VALUES (7, 'Makita Pro');
 INSERT INTO MODELO (id_modelo, nombre, id_marca) VALUES (1, 'Taladro Percutor', 1);
 INSERT INTO MODELO (id_modelo, nombre, id_marca) VALUES (2, 'Sierra Circular', 2);
+INSERT INTO MODELO (id_modelo, nombre, id_marca) VALUES (3, 'Taladro Atornillador', 3);
+INSERT INTO MODELO (id_modelo, nombre, id_marca) VALUES (4, 'Lijadora Orbital', 4);
+INSERT INTO MODELO (id_modelo, nombre, id_marca) VALUES (5, 'Sierra de Banco', 5);
+INSERT INTO MODELO (id_modelo, nombre, id_marca) VALUES (6, 'Martillo Demoledor', 6);
+INSERT INTO MODELO (id_modelo, nombre, id_marca) VALUES (7, 'Cepillo Eléctrico', 7);
+INSERT INTO MODELO (id_modelo, nombre, id_marca) VALUES (8, 'Atornillador de Impacto', 3);
+INSERT INTO MODELO (id_modelo, nombre, id_marca) VALUES (9, 'Pulidora Angular', 4);
 
 -- 5) USUARIOS UNO POR UNO
 INSERT INTO USUARIO (id_usuario, correo, contrasena, tipo_usuario, rut, primer_nombre, segundo_nombre, apellido_paterno, apellido_materno)
@@ -376,16 +391,71 @@ INSERT INTO BODEGUERO (id_usuario, id_sucursal) VALUES (4, 1);
 INSERT INTO VENDEDOR  (id_usuario, id_sucursal) VALUES (5, 1);
 
 -- 7) Productos
+
 INSERT INTO PRODUCTO (
   id_producto, nombre, descripcion, precio, stock, imagen, id_sucursal, id_modelo
 ) VALUES (
-  1, 'Taladro Bosch', 'Modelo 500W percutor', 59990, 15,'https://images.unsplash.com/photo-1519125323398-675f0ddb6308?auto=format&fit=crop&w=400&q=80', 1, 1
+  1, 'Taladro Bosch', 'Modelo 500W percutor', 59990, 15,
+  'https://media.adeo.com/mkp/522a772283f804c8cefcbe2feeed00ae/media.jpg?width=650&height=650&format=jpg&quality=80&fit=bounds', 1, 1
 );
+
 INSERT INTO PRODUCTO (
   id_producto, nombre, descripcion, precio, stock, imagen, id_sucursal, id_modelo
 ) VALUES (
-  2, 'Sierra Makita','Circular 185 mm', 74990, 10,'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=400&q=80', 2, 2
+  2, 'Sierra Makita','Circular 185 mm', 74990, 10,
+  'https://m.media-amazon.com/images/I/81hnqgJtm-L._AC_SX679_.jpg', 2, 2
 );
+
+INSERT INTO PRODUCTO (
+  id_producto, nombre, descripcion, precio, stock, imagen, id_sucursal, id_modelo
+) VALUES (
+  3, 'Taladro DeWalt 20V', 'Taladro inalámbrico 20V con batería y cargador', 94990, 12,
+  'https://m.media-amazon.com/images/I/613V4DZ-GvL.__AC_SX300_SY300_QL70_FMwebp_.jpg', 1, 3
+);
+
+INSERT INTO PRODUCTO (
+  id_producto, nombre, descripcion, precio, stock, imagen, id_sucursal, id_modelo
+) VALUES (
+  4, 'Lijadora Black+Decker', 'Lijadora orbital 200W, ideal para madera', 39990, 20,
+  'https://m.media-amazon.com/images/I/61evnUssEmL.__AC_SX300_SY300_QL70_ML2_.jpg', 1, 4
+);
+
+INSERT INTO PRODUCTO (
+  id_producto, nombre, descripcion, precio, stock, imagen, id_sucursal, id_modelo
+) VALUES (
+  5, 'Sierra de Banco Stanley', 'Sierra de banco 1800W para corte de precisión', 159990, 8,
+  'https://m.media-amazon.com/images/I/51GfxO0nETL.__AC_SX300_SY300_QL70_ML2_.jpg', 2, 5
+);
+
+INSERT INTO PRODUCTO (
+  id_producto, nombre, descripcion, precio, stock, imagen, id_sucursal, id_modelo
+) VALUES (
+  6, 'Martillo Hilti TE 2000-AVR', 'Martillo demoledor para concreto, 2000W', 599990, 4,
+  'https://m.media-amazon.com/images/I/61z1dm4trAL._AC_SY606_.jpg', 1, 6
+);
+
+INSERT INTO PRODUCTO (
+  id_producto, nombre, descripcion, precio, stock, imagen, id_sucursal, id_modelo
+) VALUES (
+  7, 'Cepillo Makita Pro', 'Cepillo eléctrico 750W para acabados finos', 89990, 9,
+  'https://m.media-amazon.com/images/I/71RU9wS0K5L.__AC_SX300_SY300_QL70_FMwebp_.jpg', 2, 7
+);
+
+INSERT INTO PRODUCTO (
+  id_producto, nombre, descripcion, precio, stock, imagen, id_sucursal, id_modelo
+) VALUES (
+  8, 'Atornillador Impacto DeWalt', 'Atornillador de impacto 18V compacto', 84990, 15,
+  'https://m.media-amazon.com/images/I/61XlM9GBWoL.__AC_SX300_SY300_QL70_FMwebp_.jpg', 2, 8
+);
+
+INSERT INTO PRODUCTO (
+  id_producto, nombre, descripcion, precio, stock, imagen, id_sucursal, id_modelo
+) VALUES (
+  9, 'Pulidora Angular Black+Decker', 'Pulidora angular 700W, disco 4.5"', 32990, 25,
+  'https://m.media-amazon.com/images/I/51SpzPYjVzL.__AC_SX300_SY300_QL70_FMwebp_.jpg', 1, 9
+);
+
+
 
 -- 8) Carrito y su detalle
 INSERT INTO CARRITO (id_carrito, fecha_creacion, estado, cliente_id_usuario)
@@ -414,10 +484,11 @@ INSERT INTO DETALLE_PEDIDO (
 -- 10) Pagos e informes
 INSERT INTO PAGO (
   id_pago, metodo_pago, estado_pago, fecha_pago,
-  confirmar_por, pedido_id_pedido, usuario_id_usuario, cliente_id_usuario
+  confirmar_por, comprobante, nombre_archivo, monto,
+  pedido_id_pedido, usuario_id_usuario, cliente_id_usuario
 ) VALUES (
   1, 'TARJETA', 'CONFIRMADO', SYSDATE,
-  3, 1, 1, 2
+  3, null, null, 59990, 1, 1, 2
 );
 
 INSERT INTO INFORME_VENTA (
@@ -435,8 +506,6 @@ INSERT INTO REPORTE_FINANCIERO (
 
 SET DEFINE ON;
 COMMIT;
-
-
 
 
 

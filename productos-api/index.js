@@ -4,7 +4,8 @@ const cors = require('cors');
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 const dbConfig = {
   user: 'ferremas',
@@ -201,7 +202,7 @@ app.get('/reportes-financieros', async (req, res) => {
   }
 });
 
-// ========== PEDIDOS ==========
+// ========== PEDIDOS (filtro: solo pedidos con pago confirmado o sin transferencia pendiente) ==========
 app.get('/pedidos', async (req, res) => {
   const vendedor_id = req.query.vendedor_id;
   if (!vendedor_id) return res.status(400).json({ error: "Falta vendedor_id" });
@@ -211,20 +212,30 @@ app.get('/pedidos', async (req, res) => {
     connection = await oracledb.getConnection(dbConfig);
 
     const pedidosRes = await connection.execute(
-      `SELECT 
-         p.id_pedido, p.fecha, p.estado_entrega,
-         c.nombre AS cliente_nombre
-       FROM pedido p
-       JOIN cliente c ON p.cliente_id_usuario = c.id_usuario
-       WHERE p.vendedor_id_usuario = :vendedor_id
-       ORDER BY p.fecha DESC`,
+      `
+      SELECT 
+        p.id_pedido, p.fecha, p.estado_entrega,
+        c.nombre AS cliente_nombre
+      FROM pedido p
+      JOIN cliente c ON p.cliente_id_usuario = c.id_usuario
+      WHERE p.vendedor_id_usuario = :vendedor_id
+        AND (
+          NOT EXISTS (
+            SELECT 1 FROM pago pg
+            WHERE pg.pedido_id_pedido = p.id_pedido
+              AND pg.metodo_pago = 'TRANSFERENCIA'
+              AND pg.estado_pago = 'PENDIENTE'
+          )
+        )
+      ORDER BY p.fecha DESC
+      `,
       { vendedor_id }
     );
 
     const pedidos = [];
     for (const row of pedidosRes.rows) {
       const productosRes = await connection.execute(
-        `SELECT pr.nombre, dp.cantidad 
+        `SELECT pr.nombre, dp.cantidad, pr.stock
          FROM detalle_pedido dp
          JOIN producto pr ON dp.producto_id_producto = pr.id_producto
          WHERE dp.pedido_id_pedido = :id_pedido`,
@@ -237,10 +248,12 @@ app.get('/pedidos', async (req, res) => {
         cliente_nombre: row[3],
         productos: productosRes.rows.map(rp => ({
           nombre: rp[0],
-          cantidad: rp[1]
+          cantidad: rp[1],
+          stock: rp[2]      // <-- NUEVO
         }))
       });
     }
+    
     res.json(pedidos);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -248,7 +261,6 @@ app.get('/pedidos', async (req, res) => {
     if (connection) await connection.close();
   }
 });
-
 app.put('/pedidos/:id_pedido/estado', async (req, res) => {
   const { id_pedido } = req.params;
   const { estado } = req.body;
@@ -274,7 +286,222 @@ app.put('/pedidos/:id_pedido/estado', async (req, res) => {
   }
 });
 
-//////////////////////////////////
+// ========== CREAR PEDIDO DESDE CARRITO: TRANSFERENCIA ==========
+app.post('/pedido/transferencia', async (req, res) => {
+  const { id_usuario, tipo_entrega, comprobante, nombre_archivo, monto } = req.body;
+  if (!id_usuario || !comprobante) return res.status(400).json({ error: "Faltan datos" });
+
+  let connection;
+  try {
+    connection = await oracledb.getConnection(dbConfig);
+
+    const carritoRes = await connection.execute(
+      "SELECT id_carrito FROM carrito WHERE cliente_id_usuario=:id_usuario AND estado='CREADO'",
+      { id_usuario }
+    );
+    if (carritoRes.rows.length === 0) {
+      return res.status(400).json({ error: "No hay carrito activo para este usuario" });
+    }
+    const id_carrito = carritoRes.rows[0][0];
+
+    const detallesRes = await connection.execute(
+      `SELECT producto_id, cantidad, precio_unitario FROM detalle_carrito WHERE carrito_id = :id_carrito`,
+      { id_carrito }
+    );
+    const productos = detallesRes.rows;
+    if (!productos.length) {
+      return res.status(400).json({ error: "El carrito está vacío" });
+    }
+
+    const pedidoRes = await connection.execute("SELECT NVL(MAX(id_pedido),0)+1 FROM pedido");
+    const id_pedido = pedidoRes.rows[0][0];
+
+    const id_vendedor = 5;
+    const id_bodeguero = 4;
+    const id_contador = 3;
+    const id_sucursal = 1;
+
+    await connection.execute(
+      `INSERT INTO pedido (id_pedido, fecha, estado_entrega, tipo_entrega,
+        cliente_id_usuario, bodeguero_id_usuario, contador_id_usuario,
+        carrito_id_carrito, vendedor_id_usuario, sucursal_id_sucursal)
+      VALUES (:id_pedido, SYSDATE, 'PENDIENTE', :tipo_entrega,
+        :cliente, :bodeguero, :contador, :carrito, :vendedor, :sucursal)`,
+      {
+        id_pedido,
+        tipo_entrega: tipo_entrega || "DOMICILIO",
+        cliente: id_usuario,
+        bodeguero: id_bodeguero,
+        contador: id_contador,
+        carrito: id_carrito,
+        vendedor: id_vendedor,
+        sucursal: id_sucursal,
+      }
+    );
+
+    for (const [producto_id, cantidad, precio_unitario] of productos) {
+      const id_detalleRes = await connection.execute("SELECT NVL(MAX(id_detalle_pedido),0)+1 FROM detalle_pedido");
+      const id_detalle_pedido = id_detalleRes.rows[0][0];
+      await connection.execute(
+        `INSERT INTO detalle_pedido (id_detalle_pedido, pedido_id_pedido, producto_id_producto, cantidad, precio_unitario)
+         VALUES (:id_detalle_pedido, :id_pedido, :producto_id, :cantidad, :precio_unitario)`,
+        { id_detalle_pedido, id_pedido, producto_id, cantidad, precio_unitario }
+      );
+    }
+
+    const pagoRes = await connection.execute("SELECT NVL(MAX(id_pago),0)+1 FROM pago");
+    const id_pago = pagoRes.rows[0][0];
+    await connection.execute(
+      `INSERT INTO pago (
+        id_pago, metodo_pago, estado_pago, fecha_pago,
+        confirmar_por, pedido_id_pedido, usuario_id_usuario, cliente_id_usuario, comprobante, nombre_archivo, monto
+      ) VALUES (
+        :id_pago, :metodo_pago, :estado_pago, SYSDATE,
+        :confirmar_por, :pedido_id_pedido, :usuario_id_usuario, :cliente_id_usuario, :comprobante, :nombre_archivo, :monto
+      )`,
+      {
+        id_pago,
+        metodo_pago: 'TRANSFERENCIA',
+        estado_pago: 'PENDIENTE',
+        confirmar_por: id_contador,
+        pedido_id_pedido: id_pedido,
+        usuario_id_usuario: id_usuario,
+        cliente_id_usuario: id_usuario,
+        comprobante,
+        nombre_archivo,
+        monto
+      }
+    );
+
+    await connection.execute(
+      `UPDATE carrito SET estado='USADO' WHERE id_carrito=:id_carrito`,
+      { id_carrito }
+    );
+    await connection.execute(
+      `DELETE FROM detalle_carrito WHERE carrito_id = :id_carrito`,
+      { id_carrito }
+    );
+
+    await connection.commit();
+    res.json({ mensaje: "Pedido por transferencia creado correctamente. Esperando aprobación.", id_pedido });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  } finally {
+    if (connection) await connection.close();
+  }
+});
+
+// ========== PEDIDOS TRANSFERENCIA (para el contador) ==========
+app.get('/pedidos-transferencia', async (req, res) => {
+  let connection;
+  try {
+    connection = await oracledb.getConnection(dbConfig);
+    const pagosRes = await connection.execute(
+      `SELECT
+        p.id_pago,
+        p.pedido_id_pedido AS id_pedido,
+        c.nombre AS cliente_nombre,
+        p.monto,
+        p.estado_pago,
+        p.comprobante,
+        p.nombre_archivo
+      FROM pago p
+      JOIN pedido pd ON p.pedido_id_pedido = pd.id_pedido
+      JOIN cliente c ON pd.cliente_id_usuario = c.id_usuario
+      WHERE p.metodo_pago = 'TRANSFERENCIA' AND p.estado_pago = 'PENDIENTE'
+      ORDER BY p.fecha_pago DESC`
+    );
+
+
+    const pagos = await Promise.all(pagosRes.rows.map(async row => {
+      let comprobante = row[5];
+      if (comprobante && typeof comprobante === 'object' && typeof comprobante.getData === 'function') {
+        comprobante = await comprobante.getData();
+      }
+      return {
+        id_pago: row[0],
+        id_pedido: row[1],
+        cliente_nombre: row[2],
+        monto: row[3],
+        estado_pago: row[4],
+        comprobante_url: comprobante,
+        nombre_archivo: row[6]
+      };
+    }));
+
+    res.json(pagos);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  } finally {
+    if (connection) await connection.close();
+  }
+});
+
+
+// ========== APROBAR O RECHAZAR PAGO POR TRANSFERENCIA ==========
+app.put('/pagos/:id_pago/estado', async (req, res) => {
+  const { id_pago } = req.params;
+  const { estado_pago } = req.body;
+  if (!estado_pago || !["CONFIRMADO", "RECHAZADO"].includes(estado_pago)) {
+    return res.status(400).json({ error: "Estado no válido" });
+  }
+  let connection;
+  try {
+    connection = await oracledb.getConnection(dbConfig);
+
+    const result = await connection.execute(
+      `UPDATE pago SET estado_pago=:estado_pago WHERE id_pago=:id_pago`,
+      { estado_pago, id_pago },
+      { autoCommit: true }
+    );
+    if (result.rowsAffected === 0) {
+      return res.status(404).json({ error: "Pago no encontrado" });
+    }
+
+    if (estado_pago === "CONFIRMADO") {
+      const pedidoRes = await connection.execute(
+        `SELECT pedido_id_pedido FROM pago WHERE id_pago = :id_pago`,
+        { id_pago }
+      );
+      const id_pedido = pedidoRes.rows[0][0];
+      const detRes = await connection.execute(
+        `SELECT producto_id_producto, cantidad FROM detalle_pedido WHERE pedido_id_pedido = :id_pedido`,
+        { id_pedido }
+      );
+      for (const row of detRes.rows) {
+        const producto_id = row[0];
+        const cantidad = row[1];
+        await connection.execute(
+          `UPDATE producto SET stock = stock - :cantidad WHERE id_producto = :producto_id`,
+          { cantidad, producto_id }
+        );
+      }
+      await connection.execute(
+        `UPDATE pedido SET estado_entrega='APROBADO' WHERE id_pedido=:id_pedido`,
+        { id_pedido }
+      );
+      await connection.commit();
+    }
+    if (estado_pago === "RECHAZADO") {
+      const pedidoRes = await connection.execute(
+        `SELECT pedido_id_pedido FROM pago WHERE id_pago = :id_pago`,
+        { id_pago }
+      );
+      const id_pedido = pedidoRes.rows[0][0];
+      await connection.execute(
+        `UPDATE pedido SET estado_entrega='RECHAZADO' WHERE id_pedido=:id_pedido`,
+        { id_pedido }
+      );
+      await connection.commit();
+    }
+
+    res.json({ mensaje: "Estado de pago actualizado" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  } finally {
+    if (connection) await connection.close();
+  }
+});
 
 // Obtener pedidos de un cliente por id_usuario
 app.get('/pedidos-cliente/:id_usuario', async (req, res) => {
@@ -283,7 +510,6 @@ app.get('/pedidos-cliente/:id_usuario', async (req, res) => {
   try {
     connection = await oracledb.getConnection(dbConfig);
 
-    // Busca pedidos del cliente, con suma total y productos
     const pedidosRes = await connection.execute(
       `SELECT p.id_pedido, p.fecha, p.estado_entrega, p.tipo_entrega
         FROM pedido p
@@ -293,7 +519,6 @@ app.get('/pedidos-cliente/:id_usuario', async (req, res) => {
     );
     const pedidos = [];
     for (const row of pedidosRes.rows) {
-      // Productos y total de cada pedido
       const productosRes = await connection.execute(
         `SELECT pr.nombre, dp.cantidad, dp.precio_unitario
          FROM detalle_pedido dp
@@ -306,7 +531,6 @@ app.get('/pedidos-cliente/:id_usuario', async (req, res) => {
         cantidad: r[1],
         precio_unitario: r[2]
       }));
-      // Calcular total
       const total = productos.reduce((sum, p) => sum + (p.cantidad * p.precio_unitario), 0);
       pedidos.push({
         id_pedido: row[0],
@@ -324,10 +548,6 @@ app.get('/pedidos-cliente/:id_usuario', async (req, res) => {
     if (connection) await connection.close();
   }
 });
-
-
-
-
 
 // ========== CARRITO ==========
 app.get('/carrito/:id_usuario', async (req, res) => {
@@ -365,7 +585,7 @@ app.get('/carrito/:id_usuario', async (req, res) => {
       cantidad: row[3],
       precio_unitario: row[4],
       imagen: row[5],
-      stock: row[6]      // <<--- STOCK ACTUAL DE PRODUCTO
+      stock: row[6]
     }));
 
     res.json({ carrito, productos });
@@ -570,7 +790,6 @@ app.post('/pedido/crear-desde-carrito', async (req, res) => {
   try {
     connection = await oracledb.getConnection(dbConfig);
 
-    // 1. Buscar carrito ACTIVO
     const carritoRes = await connection.execute(
       "SELECT id_carrito FROM carrito WHERE cliente_id_usuario=:id_usuario AND estado='CREADO'",
       { id_usuario }
@@ -580,7 +799,6 @@ app.post('/pedido/crear-desde-carrito', async (req, res) => {
     }
     const id_carrito = carritoRes.rows[0][0];
 
-    // 2. Traer productos del carrito
     const detallesRes = await connection.execute(
       `SELECT producto_id, cantidad, precio_unitario FROM detalle_carrito WHERE carrito_id = :id_carrito`,
       { id_carrito }
@@ -591,20 +809,16 @@ app.post('/pedido/crear-desde-carrito', async (req, res) => {
       return res.status(400).json({ error: "El carrito está vacío" });
     }
 
-    // 3. Generar ID de pedido
     const pedidoRes = await connection.execute("SELECT NVL(MAX(id_pedido),0)+1 FROM pedido");
     const id_pedido = pedidoRes.rows[0][0];
 
-    // 4. Traer datos de roles asignados automáticamente
-    const id_vendedor = 5;    // ejemplo
-    const id_bodeguero = 4;   // ejemplo
-    const id_contador = 3;    // ejemplo
-    const id_sucursal = 1;    // ejemplo
+    const id_vendedor = 5;
+    const id_bodeguero = 4;
+    const id_contador = 3;
+    const id_sucursal = 1;
 
-    // 5. Elegir tipo de entrega
     const tipo = (tipo_entrega && (tipo_entrega === "DOMICILIO" || tipo_entrega === "RETIRO")) ? tipo_entrega : "DOMICILIO";
 
-    // 6. Crear el pedido
     await connection.execute(
       `INSERT INTO pedido (id_pedido, fecha, estado_entrega, tipo_entrega,
         cliente_id_usuario, bodeguero_id_usuario, contador_id_usuario,
@@ -623,7 +837,6 @@ app.post('/pedido/crear-desde-carrito', async (req, res) => {
       }
     );
 
-    // 7. Crear los detalles y restar stock
     for (const [producto_id, cantidad, precio_unitario] of productos) {
       const id_detalleRes = await connection.execute("SELECT NVL(MAX(id_detalle_pedido),0)+1 FROM detalle_pedido");
       const id_detalle_pedido = id_detalleRes.rows[0][0];
@@ -638,7 +851,6 @@ app.post('/pedido/crear-desde-carrito', async (req, res) => {
       );
     }
 
-    // ========== AGREGADO: INSERTAR EL PAGO ==========
     const pagoRes = await connection.execute("SELECT NVL(MAX(id_pago),0)+1 FROM pago");
     const id_pago = pagoRes.rows[0][0];
     await connection.execute(
@@ -659,15 +871,12 @@ app.post('/pedido/crear-desde-carrito', async (req, res) => {
         cliente_id_usuario: id_usuario
       }
     );
-    // ========== FIN INSERTAR EL PAGO ==========
 
-    // 8. Cambia estado del carrito a USADO
     await connection.execute(
       `UPDATE carrito SET estado='USADO' WHERE id_carrito=:id_carrito`,
       { id_carrito }
     );
 
-    // 9. Borra detalles del carrito para limpiar (opcional)
     await connection.execute(
       `DELETE FROM detalle_carrito WHERE carrito_id = :id_carrito`,
       { id_carrito }
@@ -682,10 +891,7 @@ app.post('/pedido/crear-desde-carrito', async (req, res) => {
   }
 });
 
-////////////////////////////////
-
-
-// Crear nuevo reporte financiero (guarda ventas_mes y concatena en el detalle)
+// ========== REPORTES ==========
 app.post('/reportes-financieros', async (req, res) => {
   const { detalle, contador_id_usuario } = req.body;
   if (!detalle || !contador_id_usuario) return res.status(400).json({ error: "Faltan datos" });
@@ -693,23 +899,20 @@ app.post('/reportes-financieros', async (req, res) => {
   try {
     connection = await oracledb.getConnection(dbConfig);
 
-    // 1. Calcula ventas totales del mes actual
     const ventasMesRes = await connection.execute(`
       SELECT NVL(SUM(dp.cantidad * dp.precio_unitario), 0)
       FROM pedido p
       JOIN detalle_pedido dp ON p.id_pedido = dp.pedido_id_pedido
       WHERE TO_CHAR(p.fecha, 'MM-YYYY') = TO_CHAR(SYSDATE, 'MM-YYYY')
+        AND (p.estado_entrega = 'APROBADO' OR p.estado_entrega = 'ENTREGADO')
     `);
     const total_ventas_mes = ventasMesRes.rows[0][0];
 
-    // 2. Genera nuevo id_reporte
     const idRes = await connection.execute("SELECT NVL(MAX(id_reporte),0)+1 FROM REPORTE_FINANCIERO");
     const id_reporte = idRes.rows[0][0];
 
-    // 3. Prepara detalle (opcional: muestra ventas también en detalle)
     const detalleConVentas = `${detalle} | Ventas totales del mes: $${Number(total_ventas_mes).toLocaleString("es-CL")}`;
 
-    // 4. Inserta reporte con ventas_mes
     await connection.execute(
       `INSERT INTO REPORTE_FINANCIERO (id_reporte, fecha, detalle, ventas_mes, contador_id_usuario)
        VALUES (:id_reporte, SYSDATE, :detalle, :ventas_mes, :contador_id_usuario)`,
@@ -724,14 +927,12 @@ app.post('/reportes-financieros', async (req, res) => {
   }
 });
 
-
 // Endpoint para total de ventas del mes actual
 app.get('/reportes-financieros/ventas-mes', async (req, res) => {
   let connection;
   try {
     connection = await oracledb.getConnection(dbConfig);
 
-    // Ventas de pedidos CONFIRMADOS del mes actual (puedes ajustar el filtro si quieres)
     const result = await connection.execute(`
       SELECT NVL(SUM(dp.cantidad * dp.precio_unitario), 0) AS total_ventas
       FROM pedido p
@@ -739,7 +940,7 @@ app.get('/reportes-financieros/ventas-mes', async (req, res) => {
       WHERE 
         EXTRACT(MONTH FROM p.fecha) = EXTRACT(MONTH FROM SYSDATE)
         AND EXTRACT(YEAR FROM p.fecha) = EXTRACT(YEAR FROM SYSDATE)
-        AND p.estado_entrega != 'ANULADO'
+        AND (p.estado_entrega = 'APROBADO' OR p.estado_entrega = 'ENTREGADO')
     `);
 
     const total = result.rows[0][0];
@@ -752,6 +953,74 @@ app.get('/reportes-financieros/ventas-mes', async (req, res) => {
 });
 
 
+// ==================== INFORMES DE VENTA (ADMINISTRADOR) ====================
 
+// Listar todos los informes de venta
+app.get('/informes-venta', async (req, res) => {
+  let connection;
+  try {
+    connection = await oracledb.getConnection(dbConfig);
+    const result = await connection.execute(
+      `SELECT 
+        iv.id_informe, 
+        iv.fecha, 
+        iv.descripcion, 
+        iv.monto_total, 
+        u.primer_nombre || ' ' || u.apellido_paterno AS administrador
+      FROM informe_venta iv
+      JOIN usuario u ON iv.administrador_id_usuario = u.id_usuario
+      ORDER BY iv.fecha DESC`
+    );
+    const informes = result.rows.map(row => ({
+      id_informe: row[0],
+      fecha: row[1],
+      descripcion: row[2],
+      monto_total: row[3],
+      administrador: row[4]
+    }));
+    res.json(informes);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  } finally {
+    if (connection) await connection.close();
+  }
+});
 
-// ========== FIN ==========
+// Crear nuevo informe de venta (ejemplo: suma todas las ventas del mes actual)
+app.post('/informes-venta', async (req, res) => {
+  const { descripcion, administrador_id_usuario } = req.body;
+  if (!descripcion || !administrador_id_usuario) {
+    return res.status(400).json({ error: "Faltan datos" });
+  }
+  let connection;
+  try {
+    connection = await oracledb.getConnection(dbConfig);
+    // Sumar ventas del mes actual (solo pedidos aprobados y entregados, no anulados ni pendientes)
+    const ventasMesRes = await connection.execute(`
+      SELECT NVL(SUM(dp.cantidad * dp.precio_unitario), 0)
+      FROM pedido p
+      JOIN detalle_pedido dp ON p.id_pedido = dp.pedido_id_pedido
+      WHERE 
+        EXTRACT(MONTH FROM p.fecha) = EXTRACT(MONTH FROM SYSDATE)
+        AND EXTRACT(YEAR FROM p.fecha) = EXTRACT(YEAR FROM SYSDATE)
+        AND p.estado_entrega IN ('APROBADO', 'ENTREGADO', 'LISTO', 'EN PREPARACIÓN')
+    `);
+    const monto_total = ventasMesRes.rows[0][0];
+
+    // Nuevo ID
+    const idRes = await connection.execute("SELECT NVL(MAX(id_informe),0)+1 FROM informe_venta");
+    const id_informe = idRes.rows[0][0];
+
+    await connection.execute(
+      `INSERT INTO informe_venta (id_informe, fecha, descripcion, monto_total, administrador_id_usuario)
+       VALUES (:id_informe, SYSDATE, :descripcion, :monto_total, :administrador_id_usuario)`,
+      { id_informe, descripcion, monto_total, administrador_id_usuario },
+      { autoCommit: true }
+    );
+    res.json({ mensaje: "Informe creado correctamente", id_informe });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  } finally {
+    if (connection) await connection.close();
+  }
+});

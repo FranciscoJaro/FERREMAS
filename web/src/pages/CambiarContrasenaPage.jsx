@@ -12,7 +12,6 @@ export default function CambiarContrasenaPage() {
 
   if (!usuario) return <div className="text-center mt-5">Debes iniciar sesión.</div>;
   if (!usuario.cambiar_contrasena) {
-    // Si ya cambió la contraseña, no debe estar aquí
     navigate("/admin");
     return null;
   }

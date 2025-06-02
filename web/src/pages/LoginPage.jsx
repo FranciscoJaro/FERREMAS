@@ -23,7 +23,7 @@ export default function LoginPage() {
         setMensaje("¡Bienvenido " + data.usuario.nombre + "!");
         localStorage.setItem("usuario", JSON.stringify(data.usuario));
 
-        // SOLO el admin y si debe cambiar contraseña: lo fuerza a la página de cambio
+        // SOLO el admin
         if (
           data.usuario.tipo_usuario === "administrador" &&
           data.usuario.cambiar_contrasena === 1
@@ -50,7 +50,7 @@ export default function LoginPage() {
         }, 800);
       } else {
         setTipo("danger");
-        setMensaje(data.detail || "Credenciales incorrectas");
+        setMensaje("Credenciales incorrectas");
       }
     } catch (error) {
       setTipo("danger");

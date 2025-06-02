@@ -10,7 +10,6 @@ export default function PerfilPage() {
   const [cargando, setCargando] = useState(true);
   const [msg, setMsg] = useState(null);
   const [telefonoError, setTelefonoError] = useState("");
-  // PEDIDOS DEL CLIENTE
   const [pedidos, setPedidos] = useState([]);
   const [cargandoPedidos, setCargandoPedidos] = useState(false);
 
@@ -207,7 +206,7 @@ export default function PerfilPage() {
         <Col md={7}>
           <Card className="shadow-sm h-100">
             <Card.Body>
-              <h4 className="fw-bold mb-4"><FaBox /> Mis pedidos recientes</h4>
+              <h4 className="fw-bold mb-4"><FaBox /> Mis pedidos</h4>
               {cargandoPedidos ? (
                 <div className="text-center py-4"><Spinner animation="border" /></div>
               ) : pedidos.length === 0 ? (

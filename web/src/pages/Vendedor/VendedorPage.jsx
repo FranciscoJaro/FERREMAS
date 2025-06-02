@@ -24,7 +24,8 @@ export default function VendedorPage() {
     { value: "APROBADO", label: "Aprobado", color: "info" },
     { value: "PREPARACION", label: "En Preparación", color: "primary" },
     { value: "LISTO", label: "Listo", color: "secondary" },
-    { value: "ENTREGADO", label: "Entregado", color: "success" }
+    { value: "ENTREGADO", label: "Entregado", color: "success" },
+    { value: "RECHAZADO", label: "Rechazado", color: "danger" }
   ];
 
   const handleCambiarEstado = async (id_pedido, nuevoEstado) => {
@@ -95,6 +96,7 @@ export default function VendedorPage() {
                     <tr>
                       <th>Producto</th>
                       <th>Cantidad</th>
+                      <th>Stock actual</th> {/* NUEVO */}
                     </tr>
                   </thead>
                   <tbody>
@@ -102,21 +104,29 @@ export default function VendedorPage() {
                       <tr key={i}>
                         <td>{prod.nombre}</td>
                         <td>{prod.cantidad}</td>
+                        <td>{prod.stock ?? "?"}</td> {/* NUEVO */}
                       </tr>
                     ))}
                   </tbody>
                 </Table>
                 <div className="d-flex gap-2 flex-wrap">
-                  {/* Cambiar estado (sólo muestra botones de los cambios posibles) */}
+                  {/* Cambiar estado */}
                   {pedido.estado === "PENDIENTE" && (
-                    <Button
-                      variant="info"
-                      onClick={() => handleCambiarEstado(pedido.id_pedido, "APROBADO")}
-                    >
-                      Aprobar pedido
-                    </Button>
+                    <>
+                      <Button
+                        variant="info"
+                        onClick={() => handleCambiarEstado(pedido.id_pedido, "APROBADO")}
+                      >
+                        Aprobar pedido
+                      </Button>
+                      <Button
+                        variant="danger"
+                        onClick={() => handleCambiarEstado(pedido.id_pedido, "RECHAZADO")}
+                      >
+                        Rechazar pedido
+                      </Button>
+                    </>
                   )}
-                  {/* Si el pedido está en LISTO, mostrar botón para marcar como ENTREGADO */}
                   {pedido.estado === "LISTO" && (
                     <Button
                       variant="success"
@@ -126,6 +136,11 @@ export default function VendedorPage() {
                     </Button>
                   )}
                 </div>
+                {pedido.estado === "RECHAZADO" && (
+                  <Alert variant="danger" className="mt-3">
+                    Pedido rechazado. El cliente fue notificado.
+                  </Alert>
+                )}
               </Accordion.Body>
             </Accordion.Item>
           ))}

@@ -27,6 +27,9 @@ export default function AdminPage() {
           <Button variant="outline-primary" className="me-2" href="/admin/reportes">
             Ver Reportes
           </Button>
+          <Button variant="outline-primary" className="me-2" href="/admin/Informes">
+            Gestion Informes
+          </Button>
         </Card.Body>
       </Card>
     </Container>

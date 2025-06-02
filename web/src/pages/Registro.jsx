@@ -165,7 +165,7 @@ export default function Registro() {
         ) {
           setMensaje('¡Registro exitoso! Redirigiendo...');
           setTipo('success');
-          setTimeout(() => navigate("/"), 1200);
+          setTimeout(() => navigate("/login"), 1200);
           setEnviando(false);
           return;
         }
@@ -177,7 +177,7 @@ export default function Registro() {
 
       setMensaje('¡Registro exitoso! Redirigiendo...');
       setTipo('success');
-      setTimeout(() => navigate("/"), 1200);
+      setTimeout(() => navigate("/login"), 1200);
     } catch (err) {
       let msg = err.message;
       if (
@@ -188,7 +188,7 @@ export default function Registro() {
         msg = "El RUT o correo ya están registrados. Puedes iniciar sesión.";
         setMensaje(msg);
         setTipo('success');
-        setTimeout(() => navigate("/"), 1200);
+        setTimeout(() => navigate("/login"), 1200);
         setEnviando(false);
         return;
       }

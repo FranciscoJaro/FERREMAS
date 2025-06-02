@@ -13,7 +13,6 @@ export default function FooterFerremas() {
     >
       <div>© 2025 <span style={{ color: "#FFD600" }}>FERREMAS</span>. Todos los derechos reservados.</div>
       <div style={{ fontSize: "0.92rem", opacity: 0.75 }}>
-        Proyecto académico - Integración de Plataformas
       </div>
     </footer>
   );
